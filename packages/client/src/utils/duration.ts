@@ -1,62 +1,51 @@
 import { Duration } from "@nzovu/proto";
+import { duration as validateDuration, invalid } from "./contracts";
 
-/**
- * Parse duration string (e.g., "30s", "5m", "1h") to Duration object
- */
-export function parseDuration(duration: string): Duration {
-  const match = duration.match(/^(\d+)(ms|s|m|h)$/);
-  if (!match) {
-    throw new Error(
-      `Invalid duration format: ${duration}. Expected format: <number><unit> (e.g., "30s", "5m", "1h")`,
-    );
-  }
+const NANOS = 1000000000n;
 
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-
-  let seconds: number = 0;
-  let nanos: number = 0;
-  switch (unit) {
-    case "ms":
-      seconds = Math.floor(value / 1000);
-      nanos = (value % 1000) * 1000000;
-      break;
-    case "s":
-      seconds = value;
-      break;
-    case "m":
-      seconds = value * 60;
-      break;
-    case "h":
-      seconds = value * 60 * 60;
-      break;
-    default:
-      throw new Error(`Unknown duration unit: ${unit}`);
-  }
-
-  return {
-    seconds: seconds.toString(),
-    nanos,
+export function parseDuration(value: string): Duration {
+  const match =
+    typeof value === "string" &&
+    /^(\d+)(?:\.(\d{1,9}))?(ns|us|ms|s|m|h)$/.exec(value);
+  if (!match) invalid(`Invalid duration format: ${value}`);
+  const units: Record<string, bigint> = {
+    ns: 1n,
+    us: 1000n,
+    ms: 1000000n,
+    s: NANOS,
+    m: 60n * NANOS,
+    h: 3600n * NANOS,
   };
+  const scale = 10n ** BigInt(match[2]?.length ?? 0);
+  const numerator =
+    (BigInt(match[1]) * scale + BigInt(match[2] ?? "0")) * units[match[3]];
+  if (numerator % scale !== 0n)
+    invalid("duration has sub-nanosecond precision");
+  const nanos = numerator / scale;
+  const result = {
+    seconds: (nanos / NANOS).toString(),
+    nanos: Number(nanos % NANOS),
+  };
+  validateDuration(result, "duration");
+  return result;
 }
 
-/**
- * Convert Duration to milliseconds
- */
-export function durationToMs(duration: Duration): number {
-  const seconds = parseInt(duration.seconds, 10);
-  const nanos = duration.nanos || 0;
-  return seconds * 1000 + Math.floor(nanos / 1000000);
+export function durationToMs(value: Duration): number {
+  validateDuration(value, "duration");
+  const millis =
+    BigInt(value.seconds) * 1000n + BigInt(Math.floor(value.nanos / 1000000));
+  if (millis > BigInt(Number.MAX_SAFE_INTEGER))
+    invalid("duration cannot be represented safely as milliseconds");
+  return Number(millis);
 }
 
-/**
- * Convert milliseconds to Duration
- */
 export function msToDuration(ms: number): Duration {
-  const seconds = Math.floor(ms / 1000);
-  const nanos = (ms % 1000) * 1000000;
-  return {
-    seconds: seconds.toString(),
-    nanos,
+  if (!Number.isSafeInteger(ms) || ms < 0)
+    invalid("milliseconds must be a non-negative safe integer");
+  const result = {
+    seconds: (BigInt(ms) / 1000n).toString(),
+    nanos: Number(BigInt(ms) % 1000n) * 1000000,
   };
+  validateDuration(result, "duration");
+  return result;
 }

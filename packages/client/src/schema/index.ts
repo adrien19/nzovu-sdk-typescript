@@ -1,3 +1,11 @@
+import {
+  ListOptions,
+  page,
+  text,
+  integer,
+  invalid,
+  jsonValue,
+} from "../utils/contracts";
 import { Schema as ProtoSchema, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
@@ -14,8 +22,8 @@ export class SchemaClient {
   async registerSchema(
     schemaId: string,
     content: string,
-    options?: {
-      name?: string;
+    options: {
+      name: string;
       description?: string;
       contentType?: string;
       metadata?: Record<string, string>;
@@ -23,6 +31,24 @@ export class SchemaClient {
   ): Promise<{ schemaId: string; version: number; createdAt: string }> {
     validateRequired(schemaId, "schemaId");
     validateRequired(content, "content");
+    text(options?.name, "name");
+    text(options.description ?? "", "description", false);
+    if (
+      options.contentType !== undefined &&
+      options.contentType !== "" &&
+      options.contentType !== "json-schema"
+    )
+      invalid("contentType must be json-schema");
+    if (options.metadata !== undefined) {
+      if (
+        !options.metadata ||
+        typeof options.metadata !== "object" ||
+        Array.isArray(options.metadata)
+      )
+        invalid("metadata must be a string map");
+      for (const value of Object.values(options.metadata))
+        text(value, "metadata value", false);
+    }
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -42,6 +68,10 @@ export class SchemaClient {
         };
 
         client.registerSchema(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else if (response) {
@@ -66,6 +96,7 @@ export class SchemaClient {
     version?: number,
   ): Promise<ProtoSchema.Schema | undefined> {
     validateRequired(schemaId, "schemaId");
+    integer(version ?? 0, "version");
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -73,10 +104,14 @@ export class SchemaClient {
       return new Promise<ProtoSchema.Schema | undefined>((resolve, reject) => {
         const request: QueueServiceTypes.GetSchemaRequest = {
           schemaId,
-          version: version || 0, // 0 means latest version
+          version: version ?? 0, // 0 means latest version
         };
 
         client.getSchema(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -90,57 +125,77 @@ export class SchemaClient {
   /**
    * List all schemas
    */
-  async listSchemas(options?: {
-    prefix?: string;
-    limit?: number;
-    activeOnly?: boolean;
-  }): Promise<QueueServiceTypes.SchemaInfo[]> {
+  async listSchemas(
+    options: ListOptions & { activeOnly?: boolean } = {},
+  ): Promise<QueueServiceTypes.ListSchemasResponse> {
+    const paging = page(options);
+    text(options.prefix ?? "", "prefix", false);
+    if (
+      options.activeOnly !== undefined &&
+      typeof options.activeOnly !== "boolean"
+    )
+      invalid("activeOnly must be boolean");
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<QueueServiceTypes.SchemaInfo[]>((resolve, reject) => {
-        const request: QueueServiceTypes.ListSchemasRequest = {
-          prefix: options?.prefix || "",
-          pageSize: options?.limit ?? 100,
-          pageToken: "",
-          activeOnly:
-            options?.activeOnly !== undefined ? options.activeOnly : false,
-        };
+      return new Promise<QueueServiceTypes.ListSchemasResponse>(
+        (resolve, reject) => {
+          const request: QueueServiceTypes.ListSchemasRequest = {
+            prefix: options?.prefix || "",
+            ...paging,
+            activeOnly:
+              options?.activeOnly !== undefined ? options.activeOnly : false,
+          };
 
-        client.listSchemas(request, (error, response) => {
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.schemas || []);
-          }
-        });
-      });
+          client.listSchemas(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
+            if (error) {
+              reject(handleGrpcError(error));
+            } else {
+              resolve(response);
+            }
+          });
+        },
+      );
     });
   }
 
   /**
    * Delete a schema version (or all versions if version not specified)
    */
-  async deleteSchema(schemaId: string, version?: number): Promise<boolean> {
+  async deleteSchema(
+    schemaId: string,
+    version?: number,
+  ): Promise<QueueServiceTypes.DeleteSchemaResponse> {
     validateRequired(schemaId, "schemaId");
+    integer(version ?? 0, "version");
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<boolean>((resolve, reject) => {
-        const request: QueueServiceTypes.DeleteSchemaRequest = {
-          schemaId,
-          version: version || 0, // 0 means all versions
-        };
+      return new Promise<QueueServiceTypes.DeleteSchemaResponse>(
+        (resolve, reject) => {
+          const request: QueueServiceTypes.DeleteSchemaRequest = {
+            schemaId,
+            version: version ?? 0, // 0 means all versions
+          };
 
-        client.deleteSchema(request, (error, response) => {
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.success || false);
-          }
-        });
-      });
+          client.deleteSchema(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
+            if (error) {
+              reject(handleGrpcError(error));
+            } else {
+              resolve(response);
+            }
+          });
+        },
+      );
     });
   }
 
@@ -154,7 +209,7 @@ export class SchemaClient {
    */
   async validatePayload(
     schemaId: string,
-    payload: any,
+    payload: unknown,
     version?: number,
   ): Promise<{
     valid: boolean;
@@ -163,7 +218,9 @@ export class SchemaClient {
     schemaVersion: number;
   }> {
     validateRequired(schemaId, "schemaId");
-    validateRequired(payload, "payload");
+    integer(version ?? 0, "version");
+    if (payload === undefined) invalid("payload is required");
+    if (typeof payload !== "string") jsonValue(payload);
 
     // Convert payload to JSON string if it's an object
     const payloadString =
@@ -180,11 +237,15 @@ export class SchemaClient {
       }>((resolve, reject) => {
         const request: QueueServiceTypes.ValidatePayloadRequest = {
           schemaId,
-          version: version || 0,
+          version: version ?? 0,
           payload: payloadString,
         };
 
         client.validatePayload(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else if (response) {

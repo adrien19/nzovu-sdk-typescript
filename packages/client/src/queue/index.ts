@@ -1,3 +1,4 @@
+import { ListOptions, page, text, leasePolicy } from "../utils/contracts";
 import { Queue as ProtoQueue, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
@@ -17,20 +18,7 @@ export class QueueClient {
   ): Promise<boolean> {
     validateRequired(name, "name");
 
-    const metadataWithDefaults: ProtoQueue.QueueMetadata = {
-      type: metadata?.type || ProtoQueue.QueueType.SIMPLE,
-      leaseDuration: metadata?.leaseDuration || { seconds: "30", nanos: 0 },
-      defaultMaxAttempts: metadata?.defaultMaxAttempts ?? 3,
-      autoCreateDlq: metadata?.autoCreateDlq ?? true,
-      exclusivityKey: metadata?.exclusivityKey ?? "",
-      deadLetterQueueName: metadata?.deadLetterQueueName ?? "",
-      maxPayloadSize: metadata?.maxPayloadSize ?? 0,
-      allowedContentTypes: metadata?.allowedContentTypes ?? [],
-      schemaRequired: metadata?.schemaRequired ?? false,
-      schemaId: metadata?.schemaId ?? "",
-      leasePolicy: metadata?.leasePolicy,
-      ...metadata,
-    };
+    leasePolicy(metadata?.leasePolicy);
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -38,10 +26,14 @@ export class QueueClient {
       return new Promise<boolean>((resolve, reject) => {
         const request: QueueServiceTypes.CreateQueueRequest = {
           name,
-          metadata: metadataWithDefaults,
+          metadata,
         };
 
         client.createQueue(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -67,6 +59,10 @@ export class QueueClient {
         };
 
         client.deleteQueue(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -95,6 +91,10 @@ export class QueueClient {
           };
 
           client.getQueueState(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
             if (error) {
               reject(handleGrpcError(error));
             } else {
@@ -109,25 +109,34 @@ export class QueueClient {
   /**
    * List queues
    */
-  async listQueues(prefix?: string): Promise<ProtoQueue.Queue[]> {
+  async listQueues(
+    options: ListOptions = {},
+  ): Promise<QueueServiceTypes.ListQueuesResponse> {
+    const paging = page(options);
+    text(options.prefix ?? "", "prefix", false);
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<ProtoQueue.Queue[]>((resolve, reject) => {
-        const request: QueueServiceTypes.ListQueuesRequest = {
-          prefix: prefix || "",
-          pageSize: 0,
-          pageToken: "",
-        };
+      return new Promise<QueueServiceTypes.ListQueuesResponse>(
+        (resolve, reject) => {
+          const request: QueueServiceTypes.ListQueuesRequest = {
+            prefix: options.prefix ?? "",
+            ...paging,
+          };
 
-        client.listQueues(request, (error, response) => {
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.queues || []);
-          }
-        });
-      });
+          client.listQueues(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
+            if (error) {
+              reject(handleGrpcError(error));
+            } else {
+              resolve(response);
+            }
+          });
+        },
+      );
     });
   }
 }

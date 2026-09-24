@@ -144,6 +144,8 @@ export const acknowledgeMessageSchema = z.object({
 });
 
 export const renewMessageLeaseSchema = z.object({
+  worker_id: z.string().min(1),
+  attempt_id: z.string().min(1),
   queue_name: z.string().min(1, 'Queue name is required'),
   message_id: z.string().min(1, 'Message ID is required'),
   lease_duration: durationSchema.optional(),
@@ -271,7 +273,7 @@ export const requeueFromDLQSchema = z.preprocess(
     queue_name: z.string().optional(),
     message_id: z.string().optional(),
     message_ids: z.array(z.string()).min(1, 'At least one message ID is required'),
-    target_queue: z.string().optional(),
+    target_queue: z.string().min(1),
   })
 );
 

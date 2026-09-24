@@ -1,324 +1,174 @@
 # @nzovu/client
 
-TypeScript/Node.js client SDK for Nzovu – a distributed task queue system with priorities, delayed execution, scheduled tasks, and schema validation.
+Promise-based Nzovu gRPC client. Private development package; build and use from
+this workspace. See the root README for local setup and validation commands.
 
-## Installation
-
-```bash
-npm install @nzovu/client
-# or
-pnpm add @nzovu/client
-# or
-yarn add @nzovu/client
-```
-
-## Quick Start
+## Queue and message lifecycle
 
 ```typescript
-import { NzovuClient } from "@nzovu/client";
+import { NzovuClient, Message, Queue, parseDuration } from "@nzovu/client";
 
 const client = new NzovuClient({
-  connection: { address: "localhost:9000" },
+  connection: { address: "localhost:9000", retry: { enabled: false } },
 });
 await client.connect();
-
-// Create a queue
-await client.queues.createQueue("checkout-orders", {
-  type: ProtoQueue.QueueType.SIMPLE,
-  defaultMaxAttempts: 3,
-  leaseDuration: { seconds: "300", nanos: 0 },
-  autoCreateDlq: true,
-});
-
-// Register a schema
-await client.schemas.registerSchema(
-  "store-cart.v1",
-  JSON.stringify({
-    $schema: "http://json-schema.org/draft-07/schema#",
-    type: "object",
-    required: ["cartId", "userId", "items", "totalAmount"],
-    properties: {
-      cartId: { type: "string" },
-      userId: { type: "string" },
-      items: { type: "array" },
-      totalAmount: { type: "number" },
-    },
-  }),
-  { name: "Store Cart Schema", contentType: "json-schema" },
-);
-
-// Post a validated message
-await client.messages.postMessage("checkout-orders", {
-  messageId: "order-123",
-  metadata: {
-    payload: {
-      data: {
-        cartId: "cart-abc123",
-        userId: "user-456",
-        items: [{ productId: "prod-001", quantity: 1, price: 999.99 }],
-        totalAmount: 999.99,
-      },
-      contentType: "application/json",
-      schemaId: "store-cart.v1",
-      schemaVersion: 1,
-    },
-    priority: 5,
-    maxAttempts: 3,
-    state: 0, // PENDING
-  },
-});
-
-// Get next message
-const { message, streamEntryId } =
-  await client.messages.getNextMessage("checkout-orders");
-if (message) {
-  // Process message
-  console.log("Processing:", message.metadata?.payload?.data);
-  // Acknowledge
-  await client.messages.acknowledgeMessage(
-    "checkout-orders",
-    message.messageId,
-    1, // PROCESSED
-    streamEntryId,
-  );
-}
-await client.disconnect();
-```
-
-## Features
-
-### Queue Management
-
-```typescript
-// Create queue
-await client.queues.createQueue("orders", {
-  type: ProtoQueue.QueueType.SIMPLE,
-  defaultMaxAttempts: 3,
-  maxPayloadSize: 1024 * 512, // 512KB
-  deadLetterQueueName: "orders-dlq",
-  autoCreateDlq: true,
-});
-
-// Get queue state
-const queue = await client.queues.getQueueState("orders");
-
-// List queues
-const queues = await client.queues.listQueues();
-
-// Delete queue
-await client.queues.deleteQueue("orders");
-```
-
-### Message Operations
-
-```typescript
-import { Message, parseDuration } from '@nzovu/client';
-
-// Post message
-await client.messages.postMessage('orders', {
-  messageId: 'order-123',
-  metadata: {
-    payload: {
-      data: Buffer.from(JSON.stringify({ orderId: '123', items: [...] })),
-      contentType: 'application/json',
-    },
-    priority: 5,
-    maxAttempts: 3,
-    state: Message.Message_Metadata_State.PENDING,
-  },
-});
-
-// Get next message (consumer)
-const { message, streamEntryId } = await client.messages.getNextMessage(
-  'orders',
-  parseDuration('5m'), // 5 minute lease
-  'worker-1' // exclusivity key for EXCLUSIVE queues
-);
-
-// Renew message lease
-await client.messages.renewMessageLease(
-  'orders',
-  message.messageId,
-  parseDuration('5m')
-);
-
-// Acknowledge message
-await client.messages.acknowledgeMessage(
-  'orders',
-  message.messageId,
-  Message.Message_Metadata_State.COMPLETED, // or ERRORED
-  streamEntryId
-);
-
-// Peek messages without consuming
-const messages = await client.messages.peekQueueMessages('orders', '10');
-```
-
-### Scheduled Tasks
-
-```typescript
-// Create a cron schedule (every day at midnight)
-await client.schedules.createSchedule({
-  scheduleId: "daily-report",
-  metadata: {
-    queueName: "reports",
-    cronSchedule: "0 0 * * *",
-    payload: {
-      data: { report: "daily-orders" },
-      contentType: "application/json",
-    },
-    state: 0, // SCHEDULED
-    priority: "10",
-    timezone: "UTC",
-    messageIds: [],
-    exclusivityKey: "",
-    stateMessage: "",
-    hasMaxMessages: false,
-    maxMessages: "0",
-    nextRuns: [],
-  },
-});
-
-// Get schedule
-const schedule = await client.schedules.getSchedule("daily-report");
-// List schedules
-const schedules = await client.schedules.listSchedules();
-// Pause, resume, delete
-await client.schedules.pauseSchedule("daily-report");
-await client.schedules.resumeSchedule("daily-report");
-await client.schedules.deleteSchedule("daily-report");
-```
-
-### Schema Management
-
-```typescript
-// Register a schema
-await client.schemas.registerSchema(
-  "store-cart.v1",
-  JSON.stringify({
-    $schema: "http://json-schema.org/draft-07/schema#",
-    type: "object",
-    required: ["cartId", "userId", "items", "totalAmount"],
-    properties: {
-      cartId: { type: "string" },
-      userId: { type: "string" },
-      items: { type: "array" },
-      totalAmount: { type: "number" },
-    },
-  }),
-  { name: "Store Cart Schema", contentType: "json-schema" },
-);
-
-// List schemas
-const schemas = await client.schemas.listSchemas();
-// Get schema
-const schema = await client.schemas.getSchema("store-cart.v1");
-// Delete schema
-await client.schemas.deleteSchema("store-cart.v1");
-```
-
-## Error Handling
-
-```typescript
-import { NzovuError, ErrorCode } from "@nzovu/client";
-
 try {
-  await client.queues.createQueue("my-queue");
-} catch (error) {
-  if (error instanceof NzovuError) {
-    switch (error.code) {
-      case ErrorCode.ALREADY_EXISTS:
-        console.log("Queue already exists");
-        break;
-      case ErrorCode.UNAVAILABLE:
-        console.log("Server unavailable, retrying...");
-        break;
-      default:
-        console.error("Error:", error.message);
-    }
+  await client.queues.createQueue(
+    "orders",
+    Queue.QueueMetadata.fromPartial({
+      defaultMaxAttempts: 3,
+      autoCreateDlq: true,
+    }),
+  );
+  await client.messages.postMessage(
+    "orders",
+    Message.Message.fromPartial({
+      messageId: "order-123",
+      metadata: {
+        priority: "2",
+        payload: { data: { orderId: "123" }, contentType: "application/json" },
+        headers: [{ key: "x-trace", value: Uint8Array.from([0, 255]) }],
+      },
+    }),
+  );
+  const claim = await client.messages.getNextMessage(
+    "orders",
+    parseDuration("30s"),
+  );
+  if (claim.message) {
+    console.log(claim.message.metadata?.payload?.data);
+    await client.messages.renewMessageLease(
+      "orders",
+      claim.message.messageId,
+      parseDuration("30s"),
+      claim.workerId,
+      claim.attemptId,
+    );
+    await client.messages.acknowledgeMessage(
+      "orders",
+      claim.message.messageId,
+      Message.Message_Metadata_State.COMPLETED,
+      claim.workerId,
+      claim.attemptId,
+    );
   }
+} finally {
+  await client.disconnect();
 }
 ```
 
-## Configuration
+Use generated `fromPartial()` builders to populate protobuf defaults. Posting
+priority is an int64 string from `"0"` to `"4"`; omit runtime fields (state,
+lease expiry, renewal count, attempt and priority level). The server assigns
+runtime state. Message IDs allow ASCII letters, digits, underscores and hyphens,
+up to 256 characters. Payload data uses JSON objects, not `Buffer`.
 
-### Connection Options
+Headers preserve order, duplicate keys and opaque bytes. Keys use lowercase ASCII
+letters, digits and hyphens; `x-nzovu-`, `x-internal-` and `x-system-` are reserved.
+Each value is limited to 4096 bytes; combined keys and values to 32768 bytes.
+
+Queue metadata and lease policies are forwarded without invented defaults.
+Omitted `maxRenewals` inherits policy; explicit `0` is preserved. Ownership fields
+returned by acquisition must be passed unchanged to ACK, heartbeat and renewal.
+`sendHeartbeat(queueName, messageId, workerId, attemptId)` returns remaining time
+and state. An empty acquisition response may contain no message; a missing RPC
+response is an error.
+
+Bulk posting accepts 1–1000 messages and `TransactionMode.ALL_OR_NOTHING` (default)
+or `BEST_EFFORT`. Its complete response includes counts and ordered per-item
+results, error codes and messages. Item validation stays on the server so an
+invalid item does not prevent BEST_EFFORT processing of valid items.
+
+## Pagination
+
+All collection methods make exactly one request and return continuation tokens:
+
+| Method                                              | Result fields                            |
+| --------------------------------------------------- | ---------------------------------------- |
+| `queues.listQueues(options)`                        | `queues`, `nextPageToken`                |
+| `messages.peekQueueMessages(queueName, options)`    | `messages`, `nextPageToken`              |
+| `schedules.listSchedules(options)`                  | `schedules`, `nextPageToken`             |
+| `schedules.getScheduleHistory(scheduleId, options)` | `scheduleHistory`, `nextPageToken`       |
+| `schemas.listSchemas(options)`                      | `schemas`, `totalCount`, `nextPageToken` |
+| `dlq.getDLQMessages(dlqName, options)`              | `messages`, `nextPageToken`              |
+
+Options accept `pageSize` (0 means server default 100; maximum 1000) and opaque
+`pageToken`. Lists also accept `prefix`; schema lists accept `activeOnly`; peek
+accepts `priorityRange: { min: "0", max: "4" }`. Keep filters unchanged while
+continuing a page. No method fetches all pages automatically.
 
 ```typescript
-const client = new NzovuClient({
-  connection: {
-    address: "localhost:9000",
+const first = await client.queues.listQueues({ prefix: "order", pageSize: 10 });
+if (first.nextPageToken) {
+  const second = await client.queues.listQueues({
+    prefix: "order",
+    pageSize: 10,
+    pageToken: first.nextPageToken,
+  });
+  console.log(second.queues);
+}
+```
 
-    // Optional: TLS credentials
-    credentials: grpc.credentials.createSsl(
-      fs.readFileSync("ca.pem"),
-      fs.readFileSync("client-key.pem"),
-      fs.readFileSync("client-cert.pem"),
-    ),
+## Schedules and calendars
 
-    // Optional: gRPC channel options
-    channelOptions: {
-      "grpc.max_receive_message_length": 10 * 1024 * 1024, // 10MB
-      "grpc.keepalive_time_ms": 30000,
-    },
+`createSchedule()` accepts `Schedule.Schedule.fromPartial(...)`, with metadata
+containing `queueName`, `payload`, priority and either `cronSchedule` or
+`calendarSchedule`. Schedule headers are forwarded; `exclusivityKey` is unsupported.
+`getSchedule()`, `pauseSchedule()`, `resumeSchedule()` and `deleteSchedule()` use the
+schedule ID. History preserves durable executions, immutable message snapshots,
+errors and all timestamps.
 
-    // Optional: Connection timeout (default: 10000ms)
-    timeout: 15000,
-  },
+`validateCalendarSchedule(calendar)` returns `valid`, `errorMessage` and every
+validation issue, including field, rule index and suggestion.
+`previewCalendarSchedule(calendar, count)` returns execution times, timezone,
+preview start and total count. Omitted/zero count uses the server default (10);
+the server caps positive counts at 100. Negative and noninteger counts are invalid.
+Use `Schedule.CalendarSchedule.fromPartial(...)` to construct calendar inputs.
 
-  // Optional: Default request timeout (default: 30000ms)
-  requestTimeout: 60000,
+## Schemas and DLQ
+
+```typescript
+await client.schemas.registerSchema("order", '{"type":"object"}', {
+  name: "Order",
+  contentType: "json-schema",
+  metadata: { owner: "checkout" },
 });
+const schema = await client.schemas.getSchema("order", 0);
+const validation = await client.schemas.validatePayload(
+  "order",
+  { orderId: "123" },
+  0,
+);
+const removed = await client.schemas.deleteSchema("order", 0);
+console.log(schema, validation.errors, removed.versionsDeleted);
+await client.dlq.requeueFromDLQ("orders-dlq", "order-123", "orders");
 ```
 
-## Message States
+Registration requires ID, name and JSON Schema content. Versions are nonnegative
+int32 values: 0 selects latest for get/validate and all versions for deactivation.
+Schema lists summarize families with latest version, version count, total family
+count and pagination. Deactivation returns `success` and `versionsDeleted`.
+Validation preserves every error and its details. DLQ requeue requires an explicit
+destination; delete, purge and statistics methods preserve server results.
 
-Messages progress through these states:
+## Precision and errors
 
-- `0` - `PENDING`: Message is waiting to be processed
-- `1` - `PROCESSED`: Message was successfully processed
-- `2` - `IN_PROGRESS`: Message is currently being processed
-- `3` - `FAILED`: Message processing failed
-- `4` - `DEAD_LETTER`: Message moved to dead letter queue
+Int64 values remain decimal strings. Durations and timestamps use
+`{ seconds: string, nanos: number }`, preserving nanoseconds in wire and generated
+JSON codecs. Generated timestamp JSON uses the same object representation.
+`timestampToISOString()` formats timestamps with nine fractional digits.
+`parseDuration()` accepts nonnegative ns/us/ms/s/m/h values, including decimals
+that resolve to whole nanoseconds. `durationToMs()` explicitly truncates
+submillisecond precision; `msToDuration()` requires safe integer milliseconds.
+Both validate protobuf duration bounds.
 
-## Best Practices
-
-1. **Always disconnect**: Call `disconnect()` when done to properly close connections
-2. **Handle errors**: Wrap operations in try-catch blocks
-3. **Use message leases**: Set appropriate lease durations based on processing time
-4. **Renew long-running tasks**: Use `renewMessageLease()` for tasks longer than the initial lease
-5. **Configure dead letter queues**: Always set up DLQs to handle failed messages
-6. **Use exclusivity keys**: For ordered processing or singleton workers
-7. **Use schema validation**: Register schemas and validate messages for data quality
-8. **Use JSON objects for payloads**: Do not use Buffer for JSON data; use plain objects for schema validation
-
-## API Reference
-
-See the TypeScript definitions for complete API documentation. Key exports:
-
-- `NzovuClient` - Main client class
-- `QueueClient` - Queue management operations
-- `MessageClient` - Message operations
-- `ScheduleClient` - Scheduled task operations
-- **Types from `@nzovu/proto`** (re-exported):
-  - `ProtoMessage` – Message protocol types and enums
-  - `ProtoSchedule` – Schedule protocol types and enums
-  - `ProtoQueue` – Queue protocol types and enums
-  - Associated metadata types (e.g., `ProtoMessage.Message_Metadata`, `ProtoSchedule.Schedule_Metadata`)
-
-### Importing Types
-
-You can import protocol types directly from `@nzovu/client`:
-
-```typescript
-import { ProtoMessage, ProtoSchedule, ProtoQueue } from "@nzovu/client";
-
-// Example: use message state enum
-const state = ProtoMessage.Message_Metadata_State.PENDING;
-```
-
-These types are re-exported from `@nzovu/proto` for convenience, so you do not need to install or import from `@nzovu/proto` directly.
+RPC failures reject with `NzovuError`, mapped error code and original cause.
+Server validation remains authoritative for database-dependent rules, calendar
+semantics and JSON Schema validation. Connection defaults to plaintext; custom TLS
+credentials can be supplied through `connection.credentials`. Built-in API-key
+metadata and per-request deadline enforcement are not yet available. Disable
+retries for mutations whose outcome is ambiguous; do not replay acquired claims.
 
 ## License
 
-MIT
+MIT. Original attribution preserved in the repository `LICENCE`.

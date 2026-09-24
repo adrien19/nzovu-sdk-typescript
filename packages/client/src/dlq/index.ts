@@ -1,4 +1,5 @@
-import { Message as ProtoMessage, QueueServiceTypes } from "@nzovu/proto";
+import { PageOptions, page } from "../utils/contracts";
+import { QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
 
@@ -22,32 +23,38 @@ export class DLQClient {
    * Get messages from a Dead Letter Queue
    *
    * @param dlqName - Name of the DLQ
-   * @param limit - Maximum number of messages to retrieve (default: 10)
+   * @param options - Page size (0 uses server default) and opaque continuation token
    */
   async getDLQMessages(
     dlqName: string,
-    limit?: number,
-  ): Promise<ProtoMessage.Message[]> {
+    options: PageOptions = {},
+  ): Promise<QueueServiceTypes.GetDLQMessagesResponse> {
     validateRequired(dlqName, "dlqName");
+    const paging = page(options);
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<ProtoMessage.Message[]>((resolve, reject) => {
-        const request: QueueServiceTypes.GetDLQMessagesRequest = {
-          dlqName,
-          pageSize: limit ?? 10,
-          pageToken: "",
-        };
+      return new Promise<QueueServiceTypes.GetDLQMessagesResponse>(
+        (resolve, reject) => {
+          const request: QueueServiceTypes.GetDLQMessagesRequest = {
+            dlqName,
+            ...paging,
+          };
 
-        client.getDlqMessages(request, (error, response) => {
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.messages || []);
-          }
-        });
-      });
+          client.getDlqMessages(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
+            if (error) {
+              reject(handleGrpcError(error));
+            } else {
+              resolve(response);
+            }
+          });
+        },
+      );
     });
   }
 
@@ -56,15 +63,16 @@ export class DLQClient {
    *
    * @param dlqName - Name of the DLQ
    * @param messageId - ID of the message to requeue
-   * @param targetQueue - Target queue name (optional, defaults to original queue)
+   * @param targetQueue - Required destination queue name
    */
   async requeueFromDLQ(
     dlqName: string,
     messageId: string,
-    targetQueue?: string,
+    targetQueue: string,
   ): Promise<boolean> {
     validateRequired(dlqName, "dlqName");
     validateRequired(messageId, "messageId");
+    validateRequired(targetQueue, "targetQueue");
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -73,10 +81,14 @@ export class DLQClient {
         const request: QueueServiceTypes.RequeueFromDLQRequest = {
           dlqName,
           messageId,
-          targetQueue: targetQueue || "",
+          targetQueue,
         };
 
         client.requeueFromDlq(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -107,6 +119,10 @@ export class DLQClient {
         };
 
         client.deleteFromDlq(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -134,6 +150,10 @@ export class DLQClient {
         };
 
         client.purgeDlq(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -161,6 +181,10 @@ export class DLQClient {
         };
 
         client.getDlqStats(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else if (response) {

@@ -1,4 +1,12 @@
 import {
+  PageOptions,
+  page,
+  priority,
+  duration,
+  message as validateMessage,
+  integer,
+} from "../utils/contracts";
+import {
   Duration,
   Message as ProtoMessage,
   QueueServiceTypes,
@@ -93,7 +101,7 @@ export class MessageClient {
     message: ProtoMessage.Message,
   ): Promise<boolean> {
     validateRequired(queueName, "queueName");
-    validateRequired(message, "message");
+    validateMessage(message);
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -105,6 +113,10 @@ export class MessageClient {
         };
 
         client.postMessage(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -130,8 +142,8 @@ export class MessageClient {
    * @example
    * ```typescript
    * const messages = [
-   *   { messageId: 'msg-1', metadata: { payload: { data: {...} }, priority: '10' } },
-   *   { messageId: 'msg-2', metadata: { payload: { data: {...} }, priority: '5' } }
+   *   { messageId: 'msg-1', metadata: { payload: { data: {...} }, priority: '4' } },
+   *   { messageId: 'msg-2', metadata: { payload: { data: {...} }, priority: '2' } }
    * ];
    *
    * // Post with ALL_OR_NOTHING (default) - all succeed or all fail
@@ -156,6 +168,7 @@ export class MessageClient {
     validateRequired(queueName, "queueName");
     validateRequired(messages, "messages");
 
+    integer(transactionMode, "transactionMode", 0, 1);
     // Validate messages array
     if (!Array.isArray(messages)) {
       throw new Error("messages must be an array");
@@ -179,6 +192,10 @@ export class MessageClient {
           };
 
           client.postMessagesBulk(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
             if (error) {
               reject(handleGrpcError(error));
             } else if (response) {
@@ -215,6 +232,7 @@ export class MessageClient {
       error: Error,
       consecutiveFailures: number,
     ) => void,
+    attemptId?: string,
   ): Promise<{
     message?: ProtoMessage.Message;
     workerId?: string;
@@ -222,6 +240,8 @@ export class MessageClient {
     stopHeartbeat?: () => void;
   }> {
     validateRequired(queueName, "queueName");
+
+    duration(leaseDuration, "leaseDuration");
 
     // Note: getNextMessage is NOT wrapped with retry because it modifies state (acquires lease)
     // Retrying could lead to multiple lease acquisitions
@@ -235,9 +255,14 @@ export class MessageClient {
         leaseDuration,
         exclusivityKey: exclusivityKey || "",
         workerId: effectiveWorkerId,
+        attemptId,
       };
 
       client.getNextMessage(request, (error, response) => {
+        if (!error && response == null) {
+          reject(new Error("Empty response from server"));
+          return;
+        }
         if (error) {
           reject(handleGrpcError(error));
         } else {
@@ -447,6 +472,10 @@ export class MessageClient {
         };
 
         client.acknowledgeMessage(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -494,6 +523,10 @@ export class MessageClient {
         };
 
         client.cancelMessage(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -549,13 +582,16 @@ export class MessageClient {
         };
 
         client.sendMessageHeartBeat(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
             resolve({
               remainingTime: response?.remainingTime,
-              state:
-                response?.state || ProtoMessage.Message_Metadata_State.PENDING,
+              state: response.state,
             });
           }
         });
@@ -570,12 +606,17 @@ export class MessageClient {
     queueName: string,
     messageId: string,
     leaseDuration?: Duration,
+    workerId?: string,
+    attemptId?: string,
   ): Promise<{
     remainingTime?: Duration;
     state: ProtoMessage.Message_Metadata_State;
   }> {
     validateRequired(queueName, "queueName");
     validateRequired(messageId, "messageId");
+    validateRequired(workerId, "workerId");
+    validateRequired(attemptId, "attemptId");
+    duration(leaseDuration, "leaseDuration");
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -588,16 +629,21 @@ export class MessageClient {
           queueName,
           messageId,
           leaseDuration,
+          workerId,
+          attemptId,
         };
 
         client.renewMessageLease(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
             resolve({
               remainingTime: response?.remainingTime,
-              state:
-                response?.state || ProtoMessage.Message_Metadata_State.PENDING,
+              state: response.state,
             });
           }
         });
@@ -610,30 +656,43 @@ export class MessageClient {
    */
   async peekQueueMessages(
     queueName: string,
-    limit: string,
-  ): Promise<ProtoMessage.Message[]> {
+    options: PageOptions & {
+      priorityRange?: QueueServiceTypes.PeekQueueMessagesRequest_PriorityRange;
+    } = {},
+  ): Promise<QueueServiceTypes.PeekQueueMessagesResponse> {
     validateRequired(queueName, "queueName");
-    validateRequired(limit, "limit");
+    const paging = page(options);
+    if (options.priorityRange) {
+      priority(options.priorityRange.min);
+      priority(options.priorityRange.max);
+      if (BigInt(options.priorityRange.min) > BigInt(options.priorityRange.max))
+        throw new Error("priority range is reversed");
+    }
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<ProtoMessage.Message[]>((resolve, reject) => {
-        const request: QueueServiceTypes.PeekQueueMessagesRequest = {
-          queueName,
-          pageSize: Number(limit),
-          pageToken: "",
-          priorityRange: undefined,
-        };
+      return new Promise<QueueServiceTypes.PeekQueueMessagesResponse>(
+        (resolve, reject) => {
+          const request: QueueServiceTypes.PeekQueueMessagesRequest = {
+            queueName,
+            ...paging,
+            priorityRange: options.priorityRange,
+          };
 
-        client.peekQueueMessages(request, (error, response) => {
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.messages || []);
-          }
-        });
-      });
+          client.peekQueueMessages(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
+            if (error) {
+              reject(handleGrpcError(error));
+            } else {
+              resolve(response);
+            }
+          });
+        },
+      );
     });
   }
 

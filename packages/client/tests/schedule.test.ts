@@ -1,3 +1,4 @@
+import { Schedule } from "@nzovu/proto";
 import { Connection } from "../src/connection";
 import { ScheduleClient } from "../src/schedule";
 
@@ -71,12 +72,14 @@ describe("ScheduleClient", () => {
         cb(null, { success: true });
       });
 
-      const schedule = {
+      const schedule = Schedule.Schedule.fromPartial({
         scheduleId: "test-schedule-1",
-        queueName: "test-queue",
-        cronExpression: "0 * * * *",
-        payload: { task: "hourly-job" },
-      };
+        metadata: {
+          queueName: "test-queue",
+          cronSchedule: "0 * * * *",
+          priority: "0",
+        },
+      });
 
       const result = await scheduleClient.createSchedule(schedule as any);
       expect(result).toBe(true);
@@ -91,10 +94,14 @@ describe("ScheduleClient", () => {
         cb(null, { success: false });
       });
 
-      const schedule = {
+      const schedule = Schedule.Schedule.fromPartial({
         scheduleId: "test-schedule-2",
-        queueName: "test-queue",
-      };
+        metadata: {
+          queueName: "test-queue",
+          cronSchedule: "0 * * * *",
+          priority: "0",
+        },
+      });
 
       const result = await scheduleClient.createSchedule(schedule as any);
       expect(result).toBe(false);
@@ -105,10 +112,14 @@ describe("ScheduleClient", () => {
         cb(new Error("Server error"), null);
       });
 
-      const schedule = {
+      const schedule = Schedule.Schedule.fromPartial({
         scheduleId: "test-schedule-3",
-        queueName: "test-queue",
-      };
+        metadata: {
+          queueName: "test-queue",
+          cronSchedule: "0 * * * *",
+          priority: "0",
+        },
+      });
 
       await expect(
         scheduleClient.createSchedule(schedule as any),
@@ -178,7 +189,7 @@ describe("ScheduleClient", () => {
       });
 
       const result = await scheduleClient.listSchedules();
-      expect(result).toEqual(expectedSchedules);
+      expect(result.schedules).toEqual(expectedSchedules);
       expect(mockClient.listSchedules).toHaveBeenCalledWith(
         expect.objectContaining({ prefix: "" }),
         expect.any(Function),
@@ -198,8 +209,8 @@ describe("ScheduleClient", () => {
         }
       });
 
-      const result = await scheduleClient.listSchedules("prod-");
-      expect(result).toEqual(expectedSchedules);
+      const result = await scheduleClient.listSchedules({ prefix: "prod-" });
+      expect(result.schedules).toEqual(expectedSchedules);
       expect(mockClient.listSchedules).toHaveBeenCalledWith(
         expect.objectContaining({ prefix: "prod-" }),
         expect.any(Function),
@@ -212,16 +223,16 @@ describe("ScheduleClient", () => {
       });
 
       const result = await scheduleClient.listSchedules();
-      expect(result).toEqual([]);
+      expect(result.schedules).toEqual([]);
     });
 
-    it("should return empty array when response has no schedules property", async () => {
+    it("should return an empty page", async () => {
       mockClient.setHandler("listSchedules", (_req: any, cb: any) => {
-        cb(null, {});
+        cb(null, { schedules: [], nextPageToken: "" });
       });
 
       const result = await scheduleClient.listSchedules();
-      expect(result).toEqual([]);
+      expect(result.schedules).toEqual([]);
     });
 
     it("should reject when server returns error", async () => {
@@ -366,11 +377,11 @@ describe("ScheduleClient", () => {
       });
 
       const result = await scheduleClient.getScheduleHistory("test-schedule-1");
-      expect(result).toEqual(expectedHistory);
+      expect(result.scheduleHistory).toEqual(expectedHistory);
       expect(mockClient.getScheduleHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           scheduleId: "test-schedule-1",
-          pageSize: 100,
+          pageSize: 0,
           pageToken: "",
         }),
         expect.any(Function),
@@ -384,7 +395,9 @@ describe("ScheduleClient", () => {
         });
       });
 
-      await scheduleClient.getScheduleHistory("test-schedule-1", 50);
+      await scheduleClient.getScheduleHistory("test-schedule-1", {
+        pageSize: 50,
+      });
       expect(mockClient.getScheduleHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           scheduleId: "test-schedule-1",
@@ -401,7 +414,7 @@ describe("ScheduleClient", () => {
       });
 
       const result = await scheduleClient.getScheduleHistory("test-schedule-1");
-      expect(result).toBeUndefined();
+      expect(result.scheduleHistory).toBeUndefined();
     });
 
     it("should reject when server returns error", async () => {

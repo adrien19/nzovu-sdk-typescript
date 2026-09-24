@@ -152,3 +152,12 @@ describe('Tool Definitions', () => {
     });
   });
 });
+
+it('advertises required lease ownership and DLQ destination', () => {
+  const renew = allTools.find((tool) => tool.name === 'renew_message_lease')!;
+  expect(renew.inputSchema.required).toEqual(expect.arrayContaining(['worker_id', 'attempt_id']));
+  expect(renew.inputSchema.properties).toHaveProperty('worker_id');
+  expect(renew.inputSchema.properties).toHaveProperty('attempt_id');
+  const requeue = allTools.find((tool) => tool.name === 'requeue_from_dlq')!;
+  expect(requeue.inputSchema.required).toContain('target_queue');
+});

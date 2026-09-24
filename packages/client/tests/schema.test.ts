@@ -57,14 +57,14 @@ describe("SchemaClient", () => {
     });
 
     it("should throw error if schemaId is missing", async () => {
-      await expect(schemaClient.registerSchema("", "{}")).rejects.toThrow(
-        "schemaId is required",
-      );
+      await expect(
+        schemaClient.registerSchema("", "{}", { name: "Test" }),
+      ).rejects.toThrow("schemaId is required");
     });
 
     it("should throw error if content is missing", async () => {
       await expect(
-        schemaClient.registerSchema("test-schema", ""),
+        schemaClient.registerSchema("test-schema", "", { name: "Test" }),
       ).rejects.toThrow("content is required");
     });
   });
@@ -133,9 +133,9 @@ describe("SchemaClient", () => {
 
       const result = await schemaClient.listSchemas();
 
-      expect(result).toEqual(mockSchemas);
+      expect(result.schemas).toEqual(mockSchemas);
       expect(mockQueueServiceClient.listSchemas).toHaveBeenCalledWith(
-        { prefix: "", pageSize: 100, pageToken: "", activeOnly: false },
+        { prefix: "", pageSize: 0, pageToken: "", activeOnly: false },
         expect.any(Function),
       );
     });
@@ -149,7 +149,7 @@ describe("SchemaClient", () => {
       await schemaClient.listSchemas({ prefix: "user-" });
 
       expect(mockQueueServiceClient.listSchemas).toHaveBeenCalledWith(
-        { prefix: "user-", pageSize: 100, pageToken: "", activeOnly: false },
+        { prefix: "user-", pageSize: 0, pageToken: "", activeOnly: false },
         expect.any(Function),
       );
     });
@@ -163,7 +163,7 @@ describe("SchemaClient", () => {
 
       const result = await schemaClient.deleteSchema("test-schema", 1);
 
-      expect(result).toBe(true);
+      expect(result).toEqual({ success: true });
       expect(mockQueueServiceClient.deleteSchema).toHaveBeenCalledWith(
         { schemaId: "test-schema", version: 1 },
         expect.any(Function),
@@ -284,7 +284,7 @@ describe("SchemaClient", () => {
 
     it("should throw error if payload is missing", async () => {
       await expect(
-        schemaClient.validatePayload("test-schema", null as any),
+        schemaClient.validatePayload("test-schema", undefined),
       ).rejects.toThrow("payload is required");
     });
 

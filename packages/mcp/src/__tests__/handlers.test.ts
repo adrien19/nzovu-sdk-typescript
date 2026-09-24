@@ -125,7 +125,7 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle list_queues with empty result', async () => {
-      mockClient.queues.listQueues.mockResolvedValue([]);
+      mockClient.queues.listQueues.mockResolvedValue({ queues: [], nextPageToken: '' });
 
       const result = await handleToolCall('list_queues', {}, mockClient);
 
@@ -133,25 +133,28 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle list_queues with results', async () => {
-      mockClient.queues.listQueues.mockResolvedValue([
-        {
-          name: 'queue1',
-          metadata: {
-            type: 0,
-            leaseDuration: { seconds: '30', nanos: 0 },
-            defaultMaxAttempts: 3,
-            deadLetterQueueName: 'queue1-dlq',
+      mockClient.queues.listQueues.mockResolvedValue({
+        queues: [
+          {
+            name: 'queue1',
+            metadata: {
+              type: 0,
+              leaseDuration: { seconds: '30', nanos: 0 },
+              defaultMaxAttempts: 3,
+              deadLetterQueueName: 'queue1-dlq',
+            },
           },
-        },
-        {
-          name: 'queue2',
-          metadata: {
-            type: 1,
-            leaseDuration: { seconds: '60', nanos: 0 },
-            defaultMaxAttempts: 5,
+          {
+            name: 'queue2',
+            metadata: {
+              type: 1,
+              leaseDuration: { seconds: '60', nanos: 0 },
+              defaultMaxAttempts: 5,
+            },
           },
-        },
-      ]);
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall('list_queues', {}, mockClient);
 
@@ -332,28 +335,31 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle peek_messages', async () => {
-      mockClient.messages.peekQueueMessages.mockResolvedValue([
-        {
-          messageId: 'msg-1',
-          metadata: {
-            payload: {
-              data: JSON.stringify({ key: 'value1' }),
+      mockClient.messages.peekQueueMessages.mockResolvedValue({
+        messages: [
+          {
+            messageId: 'msg-1',
+            metadata: {
+              payload: {
+                data: JSON.stringify({ key: 'value1' }),
+              },
+              priority: '5',
+              attemptsLeft: 3,
             },
-            priority: '5',
-            attemptsLeft: 3,
           },
-        },
-        {
-          messageId: 'msg-2',
-          metadata: {
-            payload: {
-              data: JSON.stringify({ key: 'value2' }),
+          {
+            messageId: 'msg-2',
+            metadata: {
+              payload: {
+                data: JSON.stringify({ key: 'value2' }),
+              },
+              priority: '8',
+              attemptsLeft: 2,
             },
-            priority: '8',
-            attemptsLeft: 2,
           },
-        },
-      ]);
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall(
         'peek_messages',
@@ -364,7 +370,9 @@ describe('Tool Handlers', () => {
         mockClient
       );
 
-      expect(mockClient.messages.peekQueueMessages).toHaveBeenCalledWith('test-queue', '5');
+      expect(mockClient.messages.peekQueueMessages).toHaveBeenCalledWith('test-queue', {
+        pageSize: 5,
+      });
       expect(result).toContain('👀 Peeking at 2 message(s)');
     });
 
@@ -405,14 +413,22 @@ describe('Tool Handlers', () => {
           queue_name: 'test-queue',
           message_id: 'msg-123',
           lease_duration: '60s',
+          worker_id: 'worker-1',
+          attempt_id: 'attempt-1',
         },
         mockClient
       );
 
-      expect(mockClient.messages.renewMessageLease).toHaveBeenCalledWith('test-queue', 'msg-123', {
-        seconds: '60',
-        nanos: 0,
-      });
+      expect(mockClient.messages.renewMessageLease).toHaveBeenCalledWith(
+        'test-queue',
+        'msg-123',
+        {
+          seconds: '60',
+          nanos: 0,
+        },
+        'worker-1',
+        'attempt-1'
+      );
       expect(result).toContain('✓ Message lease renewed');
       expect(result).toContain('Remaining Time: 60s');
     });
@@ -483,17 +499,20 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle list_schedules', async () => {
-      mockClient.schedules.listSchedules.mockResolvedValue([
-        {
-          scheduleId: 'schedule-1',
-          metadata: {
-            queueName: 'queue-1',
-            cronSchedule: '0 9 * * *',
-            state: 0,
-            createdAt: new Date('2026-01-01'),
+      mockClient.schedules.listSchedules.mockResolvedValue({
+        schedules: [
+          {
+            scheduleId: 'schedule-1',
+            metadata: {
+              queueName: 'queue-1',
+              cronSchedule: '0 9 * * *',
+              state: 0,
+              createdAt: { seconds: String(Date.parse('2026-01-01') / 1000), nanos: 0 },
+            },
           },
-        },
-      ]);
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall('list_schedules', {}, mockClient);
 
@@ -523,9 +542,9 @@ describe('Tool Handlers', () => {
           queueName: 'tasks',
           cronSchedule: '0 9 * * *',
           state: 0,
-          createdAt: new Date('2026-01-01'),
-          nextRun: new Date('2026-01-02T09:00:00Z'),
-          lastRun: new Date('2026-01-01T09:00:00Z'),
+          createdAt: { seconds: String(Date.parse('2026-01-01') / 1000), nanos: 0 },
+          nextRun: { seconds: String(Date.parse('2026-01-02T09:00:00Z') / 1000), nanos: 0 },
+          lastRun: { seconds: String(Date.parse('2026-01-01T09:00:00Z') / 1000), nanos: 0 },
         },
       });
 
@@ -552,7 +571,7 @@ describe('Tool Handlers', () => {
             timezone: 'America/New_York',
           },
           state: 0,
-          createdAt: new Date('2026-01-01'),
+          createdAt: { seconds: String(Date.parse('2026-01-01') / 1000), nanos: 0 },
         },
       });
 
@@ -614,12 +633,15 @@ describe('Tool Handlers', () => {
 
     it('should handle get_schedule_history', async () => {
       mockClient.schedules.getScheduleHistory.mockResolvedValue({
-        scheduleId: 'my-schedule',
-        messages: [{ messageId: 'msg-1' }, { messageId: 'msg-2' }],
-        nextRun: new Date('2026-01-02T09:00:00Z'),
-        lastRun: new Date('2026-01-01T09:00:00Z'),
-        createdAt: new Date('2026-01-01'),
-        updatedAt: new Date('2026-01-01T09:00:00Z'),
+        scheduleHistory: {
+          scheduleId: 'my-schedule',
+          messages: [{ messageId: 'msg-1' }, { messageId: 'msg-2' }],
+          nextRun: { seconds: String(Date.parse('2026-01-02T09:00:00Z') / 1000), nanos: 0 },
+          lastRun: { seconds: String(Date.parse('2026-01-01T09:00:00Z') / 1000), nanos: 0 },
+          createdAt: { seconds: String(Date.parse('2026-01-01') / 1000), nanos: 0 },
+          updatedAt: { seconds: String(Date.parse('2026-01-01T09:00:00Z') / 1000), nanos: 0 },
+        },
+        nextPageToken: '',
       });
 
       const result = await handleToolCall(
@@ -631,13 +653,18 @@ describe('Tool Handlers', () => {
         mockClient
       );
 
-      expect(mockClient.schedules.getScheduleHistory).toHaveBeenCalledWith('my-schedule', 50);
+      expect(mockClient.schedules.getScheduleHistory).toHaveBeenCalledWith('my-schedule', {
+        pageSize: 50,
+      });
       expect(result).toContain('Schedule History');
       expect(result).toContain('msg-1');
     });
 
     it('should handle get_schedule_history when not found', async () => {
-      mockClient.schedules.getScheduleHistory.mockResolvedValue(null);
+      mockClient.schedules.getScheduleHistory.mockResolvedValue({
+        scheduleHistory: undefined,
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall(
         'get_schedule_history',
@@ -654,8 +681,11 @@ describe('Tool Handlers', () => {
       // Create more than 10 messages to test the truncation logic
       const messages = Array.from({ length: 15 }, (_, i) => ({ messageId: `msg-${i + 1}` }));
       mockClient.schedules.getScheduleHistory.mockResolvedValue({
-        scheduleId: 'my-schedule',
-        messages,
+        scheduleHistory: {
+          scheduleId: 'my-schedule',
+          messages,
+        },
+        nextPageToken: '',
       });
 
       const result = await handleToolCall(
@@ -741,23 +771,26 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle list_schemas', async () => {
-      mockClient.schemas.listSchemas.mockResolvedValue([
-        {
-          schemaId: 'user.profile.v1',
-          name: 'User Profile',
-          latestVersion: 2,
-          versionCount: 2,
-          description: 'User profile schema',
-          isActive: true,
-        },
-        {
-          schemaId: 'order.item.v1',
-          name: 'Order Item',
-          latestVersion: 1,
-          versionCount: 1,
-          isActive: true,
-        },
-      ]);
+      mockClient.schemas.listSchemas.mockResolvedValue({
+        schemas: [
+          {
+            schemaId: 'user.profile.v1',
+            name: 'User Profile',
+            latestVersion: 2,
+            versionCount: 2,
+            description: 'User profile schema',
+            isActive: true,
+          },
+          {
+            schemaId: 'order.item.v1',
+            name: 'Order Item',
+            latestVersion: 1,
+            versionCount: 1,
+            isActive: true,
+          },
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall(
         'list_schemas',
@@ -777,7 +810,7 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle list_schemas when empty', async () => {
-      mockClient.schemas.listSchemas.mockResolvedValue([]);
+      mockClient.schemas.listSchemas.mockResolvedValue({ schemas: [], nextPageToken: '' });
 
       const result = await handleToolCall('list_schemas', {}, mockClient);
 
@@ -861,16 +894,19 @@ describe('Tool Handlers', () => {
 
   describe('DLQ Operations', () => {
     it('should handle get_dlq_messages', async () => {
-      mockClient.dlq.getDLQMessages.mockResolvedValue([
-        {
-          messageId: 'msg-1',
-          payload: { task: 'failed' },
-          originalQueue: 'tasks',
-          failureReason: 'Timeout',
-          failedAt: new Date('2026-01-01'),
-          attempts: 3,
-        },
-      ]);
+      mockClient.dlq.getDLQMessages.mockResolvedValue({
+        messages: [
+          {
+            messageId: 'msg-1',
+            payload: { task: 'failed' },
+            originalQueue: 'tasks',
+            failureReason: 'Timeout',
+            failedAt: { seconds: String(Date.parse('2026-01-01') / 1000), nanos: 0 },
+            attempts: 3,
+          },
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall(
         'get_dlq_messages',
@@ -881,13 +917,13 @@ describe('Tool Handlers', () => {
         mockClient
       );
 
-      expect(mockClient.dlq.getDLQMessages).toHaveBeenCalledWith('tasks-dlq', 10);
+      expect(mockClient.dlq.getDLQMessages).toHaveBeenCalledWith('tasks-dlq', { pageSize: 10 });
       expect(result).toContain('DLQ Messages');
       expect(result).toContain('msg-1');
     });
 
     it('should handle get_dlq_messages when empty', async () => {
-      mockClient.dlq.getDLQMessages.mockResolvedValue([]);
+      mockClient.dlq.getDLQMessages.mockResolvedValue({ messages: [], nextPageToken: '' });
 
       const result = await handleToolCall(
         'get_dlq_messages',
@@ -976,19 +1012,22 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle get_dlq_messages with payload data', async () => {
-      mockClient.dlq.getDLQMessages.mockResolvedValue([
-        {
-          messageId: 'msg-1',
-          metadata: {
-            priority: 5,
-            maxAttempts: 3,
-            attemptsLeft: 0,
-            payload: {
-              data: Buffer.from(JSON.stringify({ task: 'process' })),
+      mockClient.dlq.getDLQMessages.mockResolvedValue({
+        messages: [
+          {
+            messageId: 'msg-1',
+            metadata: {
+              priority: 5,
+              maxAttempts: 3,
+              attemptsLeft: 0,
+              payload: {
+                data: Buffer.from(JSON.stringify({ task: 'process' })),
+              },
             },
           },
-        },
-      ]);
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall(
         'get_dlq_messages',
@@ -1004,16 +1043,19 @@ describe('Tool Handlers', () => {
     });
 
     it('should handle get_dlq_messages with non-JSON payload', async () => {
-      mockClient.dlq.getDLQMessages.mockResolvedValue([
-        {
-          messageId: 'msg-1',
-          metadata: {
-            payload: {
-              data: Buffer.from('plain text data'),
+      mockClient.dlq.getDLQMessages.mockResolvedValue({
+        messages: [
+          {
+            messageId: 'msg-1',
+            metadata: {
+              payload: {
+                data: Buffer.from('plain text data'),
+              },
             },
           },
-        },
-      ]);
+        ],
+        nextPageToken: '',
+      });
 
       const result = await handleToolCall(
         'get_dlq_messages',
@@ -1034,6 +1076,7 @@ describe('Tool Handlers', () => {
         {
           dlq_name: 'tasks-dlq',
           message_id: 'nonexistent',
+          target_queue: 'tasks',
         },
         mockClient
       );

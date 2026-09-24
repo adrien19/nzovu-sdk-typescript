@@ -70,11 +70,11 @@ describe("DLQClient", () => {
       });
 
       const result = await dlqClient.getDLQMessages("test-queue-dlq");
-      expect(result).toEqual(expectedMessages);
+      expect(result.messages).toEqual(expectedMessages);
       expect(mockClient.getDlqMessages).toHaveBeenCalledWith(
         expect.objectContaining({
           dlqName: "test-queue-dlq",
-          pageSize: 10,
+          pageSize: 0,
           pageToken: "",
         }),
         expect.any(Function),
@@ -86,7 +86,7 @@ describe("DLQClient", () => {
         cb(null, { messages: [] });
       });
 
-      await dlqClient.getDLQMessages("test-queue-dlq", 50);
+      await dlqClient.getDLQMessages("test-queue-dlq", { pageSize: 50 });
       expect(mockClient.getDlqMessages).toHaveBeenCalledWith(
         expect.objectContaining({
           dlqName: "test-queue-dlq",
@@ -103,7 +103,7 @@ describe("DLQClient", () => {
       });
 
       const result = await dlqClient.getDLQMessages("test-queue-dlq");
-      expect(result).toEqual([]);
+      expect(result.messages).toEqual([]);
     });
 
     it("should reject when server returns error", async () => {
@@ -127,13 +127,17 @@ describe("DLQClient", () => {
         cb(null, { success: true });
       });
 
-      const result = await dlqClient.requeueFromDLQ("test-queue-dlq", "msg-1");
+      const result = await dlqClient.requeueFromDLQ(
+        "test-queue-dlq",
+        "msg-1",
+        "target",
+      );
       expect(result).toBe(true);
       expect(mockClient.requeueFromDlq).toHaveBeenCalledWith(
         expect.objectContaining({
           dlqName: "test-queue-dlq",
           messageId: "msg-1",
-          targetQueue: "",
+          targetQueue: "target",
         }),
         expect.any(Function),
       );
@@ -160,7 +164,11 @@ describe("DLQClient", () => {
         cb(null, { success: false });
       });
 
-      const result = await dlqClient.requeueFromDLQ("test-queue-dlq", "msg-1");
+      const result = await dlqClient.requeueFromDLQ(
+        "test-queue-dlq",
+        "msg-1",
+        "target",
+      );
       expect(result).toBe(false);
     });
 
@@ -170,17 +178,19 @@ describe("DLQClient", () => {
       });
 
       await expect(
-        dlqClient.requeueFromDLQ("test-queue-dlq", "msg-1"),
+        dlqClient.requeueFromDLQ("test-queue-dlq", "msg-1", "target"),
       ).rejects.toThrow("Message not found");
     });
 
     it("should throw error when dlqName is not provided", async () => {
-      await expect(dlqClient.requeueFromDLQ("", "msg-1")).rejects.toThrow();
+      await expect(
+        dlqClient.requeueFromDLQ("", "msg-1", "target"),
+      ).rejects.toThrow();
     });
 
     it("should throw error when messageId is not provided", async () => {
       await expect(
-        dlqClient.requeueFromDLQ("test-queue-dlq", ""),
+        dlqClient.requeueFromDLQ("test-queue-dlq", "", "target"),
       ).rejects.toThrow();
     });
   });

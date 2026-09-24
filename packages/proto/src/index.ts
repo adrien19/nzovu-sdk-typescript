@@ -26,3 +26,13 @@ export * as GoogleApiHttp from "./generated/proto/google/api/http";
 // Re-export Google protobuf types
 export type { Duration } from "./generated/google/protobuf/duration";
 export type { Timestamp } from "./generated/google/protobuf/timestamp";
+
+export {
+  PostMessagesBulkResponse_MessagePostResult_ErrorCode,
+  PostMessagesBulkRequest_TransactionMode,
+} from "./generated/proto/queueservice/v1/request_response";
+export type {
+  PostMessagesBulkResponse_MessagePostResult,
+  PostMessagesBulkRequest,
+  PostMessagesBulkResponse,
+} from "./generated/proto/queueservice/v1/request_response";

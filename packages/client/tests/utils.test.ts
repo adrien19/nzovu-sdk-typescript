@@ -54,9 +54,7 @@ describe("Duration Utils", () => {
     });
 
     it("should throw error for invalid format", () => {
-      expect(() => parseDuration("invalid")).toThrow(
-        'Invalid duration format: invalid. Expected format: <number><unit> (e.g., "30s", "5m", "1h")',
-      );
+      expect(() => parseDuration("invalid")).toThrow("Invalid duration format");
     });
 
     it("should throw error for unsupported unit", () => {
@@ -83,8 +81,9 @@ describe("Duration Utils", () => {
     });
 
     it("should handle undefined nanos", () => {
-      const result = durationToMs({ seconds: "10", nanos: undefined as any });
-      expect(result).toBe(10000);
+      expect(() =>
+        durationToMs({ seconds: "10", nanos: undefined as any }),
+      ).toThrow();
     });
   });
 
