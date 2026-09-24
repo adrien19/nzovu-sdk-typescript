@@ -1,35 +1,41 @@
 import { QueueService } from "@nzovu/proto";
 import * as grpc from "@grpc/grpc-js";
-import {
-  NzovuError,
-  ConnectionOptions,
-  ErrorCode,
-  HealthCheckOptions,
-  RetryOptions,
-} from "./types";
-import { RetryConfig, retryOperation } from "./utils/retry";
+import { NzovuError, ConnectionOptions, ErrorCode, RpcOptions } from "./types";
+import { RetryConfig, calculateBackoff } from "./utils/retry";
+import { handleGrpcError } from "./utils/errors";
+import { integer, invalid, text } from "./utils/contracts";
 
-type QueueServiceClient = InstanceType<typeof QueueService.QueueServiceClient>;
-
-/** Default retry configuration */
-const DEFAULT_RETRY_OPTIONS: Required<RetryOptions> = {
-  maxRetries: 3,
-  baseDelay: 100,
-  maxDelay: 10000,
-  enabled: true,
+type Service = typeof QueueService.QueueServiceService;
+export type RpcMethod = keyof Service;
+export type Request<K extends RpcMethod> = ReturnType<
+  Service[K]["requestDeserialize"]
+>;
+export type Response<K extends RpcMethod> = ReturnType<
+  Service[K]["responseDeserialize"]
+>;
+export type CallbackClient = {
+  [K in RpcMethod]: (
+    request: Request<K>,
+    callback: (error: Error | null, response: Response<K>) => void,
+    options?: RpcOptions,
+  ) => { cancel(): void };
 };
+const READ_ONLY = new Set<RpcMethod>([
+  "getQueueState",
+  "listQueues",
+  "peekQueueMessages",
+  "getSchedule",
+  "listSchedules",
+  "getScheduleHistory",
+  "getDlqMessages",
+  "getDlqStats",
+  "validateCalendarSchedule",
+  "previewCalendarSchedule",
+  "getSchema",
+  "listSchemas",
+  "validatePayload",
+]);
 
-/** Default health check configuration */
-const DEFAULT_HEALTH_CHECK_OPTIONS: Required<HealthCheckOptions> = {
-  enabled: false,
-  intervalMs: 30000,
-  autoReconnect: true,
-  onHealthChange: () => {},
-};
-
-/**
- * Connection state for monitoring
- */
 export enum ConnectionState {
   DISCONNECTED = "DISCONNECTED",
   CONNECTING = "CONNECTING",
@@ -37,314 +43,337 @@ export enum ConnectionState {
   RECONNECTING = "RECONNECTING",
 }
 
-/**
- * Manages gRPC connection and service clients with retry, health monitoring, and auto-reconnection
- */
 export class Connection {
-  private readonly address: string;
+  private client?: InstanceType<typeof QueueService.QueueServiceClient>;
+  private state = ConnectionState.DISCONNECTED;
+  private connecting?: Promise<void>;
+  private cancelConnect?: () => void;
+  private epoch = 0;
+  private healthTimer?: ReturnType<typeof setInterval>;
+  private healthy = false;
+  private readonly pending = new Set<() => void>();
+  private readonly shutdownHooks = new Set<() => void>();
   private readonly credentials: grpc.ChannelCredentials;
-  private readonly channelOptions: grpc.ChannelOptions;
-  private readonly timeout: number;
-  private readonly retryOptions: Required<RetryOptions>;
-  private readonly healthCheckOptions: Required<HealthCheckOptions>;
+  private readonly retry: Required<NonNullable<ConnectionOptions["retry"]>>;
+  private readonly facade: CallbackClient;
 
-  private queueServiceClient?: QueueServiceClient;
-  private state: ConnectionState = ConnectionState.DISCONNECTED;
-  private healthCheckTimer?: ReturnType<typeof setInterval>;
-  private lastHealthy: boolean = false;
-  private reconnectAttempts: number = 0;
-  private readonly maxReconnectAttempts: number = 10;
-
-  constructor(options: ConnectionOptions) {
-    this.address = options.address;
-    this.credentials = options.credentials || grpc.credentials.createInsecure();
-    this.channelOptions = options.channelOptions || {};
-    this.timeout = options.timeout || 10000;
-
-    // Merge retry options with defaults
-    this.retryOptions = {
-      ...DEFAULT_RETRY_OPTIONS,
-      ...(options.retry || {}),
-      // Support legacy options
-      maxRetries:
-        options.retry?.maxRetries ??
-        options.maxRetries ??
-        DEFAULT_RETRY_OPTIONS.maxRetries,
-      baseDelay:
-        options.retry?.baseDelay ??
-        options.retryDelay ??
-        DEFAULT_RETRY_OPTIONS.baseDelay,
+  constructor(
+    private readonly options: ConnectionOptions,
+    private readonly requestTimeout = 30000,
+  ) {
+    text(options.address, "address");
+    integer(options.timeout ?? 10000, "timeout", 1);
+    integer(requestTimeout, "requestTimeout", 1);
+    integer(options.maxInFlight ?? 1000, "maxInFlight", 1);
+    if (options.insecure !== undefined && typeof options.insecure !== "boolean")
+      invalid("insecure must be boolean");
+    if (
+      options.credentials &&
+      (options.insecure !== undefined || options.tls !== undefined)
+    )
+      invalid("credentials cannot be combined with insecure/tls");
+    if (options.insecure && options.tls)
+      invalid("plaintext cannot use TLS options");
+    if (Boolean(options.tls?.cert) !== Boolean(options.tls?.key))
+      invalid("TLS cert and key must be provided together");
+    for (const buffer of Object.values(options.tls ?? {}))
+      if (!Buffer.isBuffer(buffer) || buffer.length === 0)
+        invalid("TLS values must be nonempty PEM buffers");
+    if (
+      options.apiKey !== undefined &&
+      (typeof options.apiKey !== "string" ||
+        !/^[\x21-\x7e]+$/.test(options.apiKey))
+    )
+      invalid("apiKey must be nonempty printable ASCII");
+    this.credentials =
+      options.credentials ??
+      (options.insecure
+        ? grpc.credentials.createInsecure()
+        : grpc.credentials.createSsl(
+            options.tls?.ca,
+            options.tls?.key,
+            options.tls?.cert,
+          ));
+    this.retry = {
+      enabled: true,
+      maxRetries: options.maxRetries ?? 3,
+      baseDelay: options.retryDelay ?? 100,
+      maxDelay: 10000,
+      ...options.retry,
     };
-
-    // Merge health check options with defaults
-    this.healthCheckOptions = {
-      ...DEFAULT_HEALTH_CHECK_OPTIONS,
-      ...(options.healthCheck || {}),
-    };
+    integer(this.retry.maxRetries, "maxRetries", 0, 100);
+    integer(this.retry.baseDelay, "baseDelay", 1);
+    integer(this.retry.maxDelay, "maxDelay", 1);
+    if (typeof this.retry.enabled !== "boolean")
+      invalid("retry.enabled must be boolean");
+    integer(
+      options.healthCheck?.intervalMs ?? 30000,
+      "healthCheck.intervalMs",
+      1,
+    );
+    this.facade = Object.fromEntries(
+      Object.keys(QueueService.QueueServiceService ?? {}).map((method) => [
+        method,
+        (
+          request: Request<RpcMethod>,
+          callback: (
+            error: Error | null,
+            response?: Response<RpcMethod>,
+          ) => void,
+          rpcOptions?: RpcOptions,
+        ) => {
+          const controller = new AbortController();
+          const abort = () => controller.abort();
+          rpcOptions?.signal?.addEventListener("abort", abort, { once: true });
+          if (rpcOptions?.signal?.aborted) abort();
+          void this.invoke(method as RpcMethod, request, {
+            ...rpcOptions,
+            signal: controller.signal,
+          })
+            .then(
+              (result) => callback(null, result),
+              (error) => callback(error),
+            )
+            .finally(() =>
+              rpcOptions?.signal?.removeEventListener("abort", abort),
+            );
+          return { cancel: abort };
+        },
+      ]),
+    ) as CallbackClient;
   }
 
-  /**
-   * Connect to Nzovu server
-   */
-  async connect(): Promise<void> {
-    if (this.state === ConnectionState.CONNECTED) {
-      return;
-    }
-
+  connect(): Promise<void> {
+    if (this.isConnected()) return Promise.resolve();
+    if (this.connecting) return this.connecting;
+    const epoch = ++this.epoch;
     this.state = ConnectionState.CONNECTING;
-
-    try {
-      // Create service client (Nzovu uses a single unified QueueService)
-      this.queueServiceClient = new QueueService.QueueServiceClient(
-        this.address,
-        this.credentials,
-        this.channelOptions,
-      );
-
-      // Wait for channel to be ready
-      await this.waitForReady(this.queueServiceClient);
-
-      this.state = ConnectionState.CONNECTED;
-      this.lastHealthy = true;
-      this.reconnectAttempts = 0;
-
-      // Start health check if enabled
-      if (this.healthCheckOptions.enabled) {
-        this.startHealthCheck();
-      }
-    } catch (error) {
-      this.state = ConnectionState.DISCONNECTED;
-      throw new NzovuError(
-        ErrorCode.CONNECTION_FAILED,
-        `Failed to connect to ${this.address}: ${(error as Error).message}`,
-        error as Error,
-      );
-    }
-  }
-
-  /**
-   * Wait for gRPC channel to be ready
-   */
-  private async waitForReady(client: grpc.Client): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const deadline = new Date(Date.now() + this.timeout);
-
-      client.waitForReady(deadline, (error) => {
-        if (error) {
+    const client = new QueueService.QueueServiceClient(
+      this.options.address,
+      this.credentials,
+      {
+        ...this.options.channelOptions,
+        "grpc.enable_retries": 0,
+      },
+    );
+    this.client = client;
+    const ready = new Promise<void>((resolve, reject) => {
+      let finished = false;
+      const finish = (error?: Error) => {
+        if (finished) return;
+        finished = true;
+        this.cancelConnect = undefined;
+        if (error || epoch !== this.epoch) {
+          client.close();
+          if (this.client === client) this.client = undefined;
+          this.state = ConnectionState.DISCONNECTED;
           reject(
-            new NzovuError(
-              ErrorCode.CONNECTION_TIMEOUT,
-              `Connection timeout after ${this.timeout}ms`,
-              error,
-            ),
+            error ??
+              new NzovuError(ErrorCode.CANCELLED, "Connection cancelled"),
           );
         } else {
+          this.state = ConnectionState.CONNECTED;
+          this.healthy = true;
+          this.startHealthCheck();
           resolve();
         }
-      });
+      };
+      this.cancelConnect = () =>
+        finish(new NzovuError(ErrorCode.CANCELLED, "Connection cancelled"));
+      client.waitForReady(
+        Date.now() + (this.options.timeout ?? 10000),
+        (error) =>
+          finish(
+            error
+              ? new NzovuError(
+                  ErrorCode.CONNECTION_TIMEOUT,
+                  "Connection timeout",
+                  error,
+                )
+              : undefined,
+          ),
+      );
     });
+    this.connecting = ready.finally(() => {
+      if (epoch === this.epoch) this.connecting = undefined;
+    });
+    return this.connecting;
   }
 
-  /**
-   * Disconnect from Nzovu server
-   */
   async disconnect(): Promise<void> {
-    this.stopHealthCheck();
-
-    if (this.state === ConnectionState.DISCONNECTED) {
-      return;
-    }
-
-    this.queueServiceClient?.close();
-    this.queueServiceClient = undefined;
+    ++this.epoch;
     this.state = ConnectionState.DISCONNECTED;
-    this.lastHealthy = false;
+    this.healthy = false;
+    if (this.healthTimer) clearInterval(this.healthTimer);
+    this.healthTimer = undefined;
+    for (const hook of this.shutdownHooks) hook();
+    this.cancelConnect?.();
+    this.connecting = undefined;
+    for (const cancel of [...this.pending]) cancel();
+    this.client?.close();
+    this.client = undefined;
+    await Promise.resolve();
   }
 
-  /**
-   * Get QueueService client
-   */
-  getQueueServiceClient(): QueueServiceClient {
-    this.ensureConnected();
-    return this.queueServiceClient!;
+  onDisconnect(hook: () => void): () => void {
+    this.shutdownHooks.add(hook);
+    return () => this.shutdownHooks.delete(hook);
   }
-
-  /**
-   * Check if connected
-   */
-  isConnected(): boolean {
-    return this.state === ConnectionState.CONNECTED;
-  }
-
-  /**
-   * Get current connection state
-   */
-  getState(): ConnectionState {
-    return this.state;
-  }
-
-  /**
-   * Get retry configuration for use by clients
-   */
-  getRetryConfig(): RetryConfig {
-    return {
-      maxRetries: this.retryOptions.maxRetries,
-      baseDelay: this.retryOptions.baseDelay,
-      maxDelay: this.retryOptions.maxDelay,
-    };
-  }
-
-  /**
-   * Check if retry is enabled
-   */
-  isRetryEnabled(): boolean {
-    return this.retryOptions.enabled;
-  }
-
-  /**
-   * Execute an operation with retry logic
-   */
-  async withRetry<T>(operation: () => Promise<T>): Promise<T> {
-    if (!this.retryOptions.enabled) {
-      return operation();
-    }
-
-    return retryOperation(operation, this.getRetryConfig());
-  }
-
-  /**
-   * Start health check monitoring
-   */
-  private startHealthCheck(): void {
-    if (this.healthCheckTimer) {
-      return;
-    }
-
-    this.healthCheckTimer = setInterval(async () => {
-      await this.performHealthCheck();
-    }, this.healthCheckOptions.intervalMs);
-  }
-
-  /**
-   * Stop health check monitoring
-   */
-  private stopHealthCheck(): void {
-    if (this.healthCheckTimer) {
-      clearInterval(this.healthCheckTimer);
-      this.healthCheckTimer = undefined;
-    }
-  }
-
-  /**
-   * Perform a health check on the connection
-   */
-  private async performHealthCheck(): Promise<void> {
-    if (!this.queueServiceClient) {
-      this.handleUnhealthy(new Error("No client available"));
-      return;
-    }
-
-    try {
-      // Check gRPC channel connectivity state
-      const channel = this.queueServiceClient.getChannel();
-      const state = channel.getConnectivityState(false);
-
-      const isHealthy = state === grpc.connectivityState.READY;
-
-      if (isHealthy && !this.lastHealthy) {
-        // Recovered
-        this.lastHealthy = true;
-        this.reconnectAttempts = 0;
-        this.healthCheckOptions.onHealthChange(true);
-      } else if (!isHealthy && this.lastHealthy) {
-        // Became unhealthy
-        this.handleUnhealthy(new Error(`Channel state: ${state}`));
-      }
-    } catch (error) {
-      this.handleUnhealthy(error as Error);
-    }
-  }
-
-  /**
-   * Handle unhealthy connection state
-   */
-  private handleUnhealthy(error: Error): void {
-    if (this.lastHealthy) {
-      this.lastHealthy = false;
-      this.healthCheckOptions.onHealthChange(false, error);
-    }
-
-    if (this.healthCheckOptions.autoReconnect) {
-      this.attemptReconnect();
-    }
-  }
-
-  /**
-   * Attempt to reconnect to the server
-   */
-  private async attemptReconnect(): Promise<void> {
-    if (this.state === ConnectionState.RECONNECTING) {
-      return;
-    }
-
-    if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-      return;
-    }
-
-    this.state = ConnectionState.RECONNECTING;
-    this.reconnectAttempts++;
-
-    try {
-      // Close existing connection
-      this.queueServiceClient?.close();
-      this.queueServiceClient = undefined;
-
-      // Exponential backoff for reconnection
-      const delay = Math.min(
-        this.retryOptions.baseDelay * Math.pow(2, this.reconnectAttempts - 1),
-        this.retryOptions.maxDelay,
-      );
-
-      await new Promise((resolve) => setTimeout(resolve, delay));
-
-      // Attempt to reconnect
-      this.queueServiceClient = new QueueService.QueueServiceClient(
-        this.address,
-        this.credentials,
-        this.channelOptions,
-      );
-
-      await this.waitForReady(this.queueServiceClient);
-
-      this.state = ConnectionState.CONNECTED;
-      this.lastHealthy = true;
-      this.reconnectAttempts = 0;
-      this.healthCheckOptions.onHealthChange(true);
-    } catch (_error) {
-      this.state = ConnectionState.DISCONNECTED;
-      // Will retry on next health check
-    }
-  }
-
-  /**
-   * Check connection health synchronously
-   */
-  checkHealth(): { healthy: boolean; state: ConnectionState } {
-    return {
-      healthy: this.lastHealthy && this.state === ConnectionState.CONNECTED,
-      state: this.state,
-    };
-  }
-
-  /**
-   * Ensure connection is established
-   */
-  private ensureConnected(): void {
-    if (this.state !== ConnectionState.CONNECTED) {
+  getQueueServiceClient(): CallbackClient {
+    if (!this.isConnected())
       throw new NzovuError(
         ErrorCode.CONNECTION_FAILED,
         "Not connected to Nzovu server. Call connect() first.",
       );
-    }
+    return this.facade;
+  }
+  isConnected(): boolean {
+    return this.state === ConnectionState.CONNECTED;
+  }
+  getState(): ConnectionState {
+    return this.state;
+  }
+  checkHealth(): { healthy: boolean; state: ConnectionState } {
+    return { healthy: this.healthy && this.isConnected(), state: this.state };
+  }
+  getRetryConfig(): RetryConfig {
+    return {
+      maxRetries: this.retry.maxRetries,
+      baseDelay: this.retry.baseDelay,
+      maxDelay: this.retry.maxDelay,
+    };
+  }
+  isRetryEnabled(): boolean {
+    return this.retry.enabled;
+  }
+  /** Retries are selected centrally by RPC semantics; arbitrary closures run once. */
+  withRetry<T>(operation: () => Promise<T>): Promise<T> {
+    return operation();
+  }
+
+  invoke<K extends RpcMethod>(
+    method: K,
+    request: Request<K>,
+    options: RpcOptions = {},
+  ): Promise<Response<K>> {
+    const timeout = options.timeoutMs ?? this.requestTimeout;
+    integer(timeout, "timeoutMs", 1);
+    if (!this.isConnected() || !this.client)
+      return Promise.reject(
+        new NzovuError(
+          ErrorCode.CONNECTION_FAILED,
+          "Not connected to Nzovu server",
+        ),
+      );
+    if (this.pending.size >= (this.options.maxInFlight ?? 1000))
+      return Promise.reject(
+        new NzovuError(
+          ErrorCode.RESOURCE_EXHAUSTED,
+          "Maximum in-flight RPCs reached",
+        ),
+      );
+    const client = this.client;
+    const deadline = Date.now() + timeout;
+    return new Promise((resolve, reject) => {
+      let done = false;
+      let call: grpc.ClientUnaryCall | undefined;
+      let retryTimer: ReturnType<typeof setTimeout> | undefined;
+      let attempt = 0;
+      const finish = (error?: Error, response?: Response<K>) => {
+        if (done) return;
+        done = true;
+        clearTimeout(deadlineTimer);
+        if (retryTimer) clearTimeout(retryTimer);
+        this.pending.delete(cancel);
+        options.signal?.removeEventListener("abort", cancel);
+        if (error) reject(handleGrpcError(error));
+        else resolve(response!);
+      };
+      const cancel = () => {
+        finish(new NzovuError(ErrorCode.CANCELLED, "RPC cancelled"));
+        call?.cancel();
+      };
+      const deadlineTimer = setTimeout(() => {
+        finish(
+          new NzovuError(ErrorCode.DEADLINE_EXCEEDED, "RPC deadline exceeded"),
+        );
+        call?.cancel();
+      }, timeout);
+      this.pending.add(cancel);
+      options.signal?.addEventListener("abort", cancel, { once: true });
+      const run = () => {
+        if (done) return;
+        const metadata = new grpc.Metadata();
+        if (this.options.apiKey) metadata.set("api-key", this.options.apiKey);
+        const callback = (
+          error: grpc.ServiceError | null,
+          response?: Response<K>,
+        ) => {
+          if (done) return;
+          call = undefined;
+          if (
+            error &&
+            this.retry.enabled &&
+            READ_ONLY.has(method) &&
+            error.code === grpc.status.UNAVAILABLE &&
+            attempt < this.retry.maxRetries
+          ) {
+            const delay = calculateBackoff(attempt++, this.getRetryConfig());
+            if (Date.now() + delay < deadline) {
+              retryTimer = setTimeout(run, delay);
+              return;
+            }
+          }
+          finish(
+            error ??
+              (response == null
+                ? new NzovuError(
+                    ErrorCode.DATA_LOSS,
+                    "Empty response from server",
+                  )
+                : undefined),
+            response,
+          );
+        };
+        try {
+          const unary = client[method] as unknown as (
+            request: Request<K>,
+            metadata: grpc.Metadata,
+            options: grpc.CallOptions,
+            handler: typeof callback,
+          ) => grpc.ClientUnaryCall;
+          call = unary.call(client, request, metadata, { deadline }, callback);
+        } catch (error) {
+          finish(error as Error);
+        }
+      };
+      if (options.signal?.aborted) cancel();
+      else run();
+    });
+  }
+
+  private startHealthCheck(): void {
+    if (!this.options.healthCheck?.enabled) return;
+    this.healthTimer = setInterval(() => {
+      if (!this.client || !this.isConnected()) return;
+      const healthy =
+        this.client
+          .getChannel()
+          .getConnectivityState(
+            this.options.healthCheck?.autoReconnect !== false,
+          ) === grpc.connectivityState.READY;
+      if (healthy === this.healthy) return;
+      this.healthy = healthy;
+      try {
+        if (healthy) this.options.healthCheck?.onHealthChange?.(true);
+        else
+          this.options.healthCheck?.onHealthChange?.(
+            false,
+            new Error("Channel unavailable"),
+          );
+      } catch {
+        /* User callbacks cannot interrupt connection lifecycle. */
+      }
+    }, this.options.healthCheck.intervalMs ?? 30000);
   }
 }

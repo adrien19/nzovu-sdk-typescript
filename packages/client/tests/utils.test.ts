@@ -134,9 +134,9 @@ describe("Error Utils", () => {
       );
     });
 
-    it("should map UNAUTHENTICATED to PERMISSION_DENIED", () => {
+    it("should map UNAUTHENTICATED", () => {
       expect(grpcStatusToErrorCode(grpc.status.UNAUTHENTICATED)).toBe(
-        ErrorCode.PERMISSION_DENIED,
+        ErrorCode.UNAUTHENTICATED,
       );
     });
 
@@ -164,22 +164,20 @@ describe("Error Utils", () => {
       );
     });
 
-    it("should map DATA_LOSS to INTERNAL", () => {
+    it("should map DATA_LOSS", () => {
       expect(grpcStatusToErrorCode(grpc.status.DATA_LOSS)).toBe(
-        ErrorCode.INTERNAL,
+        ErrorCode.DATA_LOSS,
       );
     });
 
-    it("should map UNKNOWN to INTERNAL", () => {
+    it("should map UNKNOWN", () => {
       expect(grpcStatusToErrorCode(grpc.status.UNKNOWN)).toBe(
-        ErrorCode.INTERNAL,
+        ErrorCode.UNKNOWN,
       );
     });
 
-    it("should map unknown status to INTERNAL", () => {
-      expect(grpcStatusToErrorCode(999 as grpc.status)).toBe(
-        ErrorCode.INTERNAL,
-      );
+    it("should map unknown status to UNKNOWN", () => {
+      expect(grpcStatusToErrorCode(999 as grpc.status)).toBe(ErrorCode.UNKNOWN);
     });
   });
 

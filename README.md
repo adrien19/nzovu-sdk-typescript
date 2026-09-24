@@ -70,7 +70,7 @@ Run from the workspace after `make build-all`:
 import { NzovuClient, Queue } from "@nzovu/client";
 
 const client = new NzovuClient({
-  connection: { address: "localhost:9000" },
+  connection: { address: "localhost:9000", insecure: true },
 });
 await client.connect();
 try {
@@ -87,9 +87,9 @@ try {
 }
 ```
 
-The current default transport is plaintext. For TLS, provide gRPC channel
-credentials through `connection.credentials`. The SDK does not yet provide
-built-in API-key configuration. Use only a suitably configured local server.
+TLS is the default; local plaintext requires `insecure: true`. Configure
+`connection.tls` for custom CA/mTLS and `connection.apiKey` for authentication.
+See the [client API](packages/client/README.md) for deadlines and lease ownership.
 
 ## MCP
 

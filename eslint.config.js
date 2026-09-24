@@ -33,6 +33,8 @@ export default [
         console: "readonly",
         process: "readonly",
         Buffer: "readonly",
+        AbortController: "readonly",
+        AbortSignal: "readonly",
         setTimeout: "readonly",
         setInterval: "readonly",
         clearTimeout: "readonly",

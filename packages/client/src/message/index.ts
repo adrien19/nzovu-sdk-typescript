@@ -1,98 +1,144 @@
 import {
+  Duration,
+  Message as ProtoMessage,
+  QueueServiceTypes,
+} from "@nzovu/proto";
+import {
+  Connection,
+  CallbackClient,
+  RpcMethod,
+  Request,
+  Response,
+} from "../connection";
+import { Logger, defaultLogger } from "../logger";
+import { NzovuError, ErrorCode } from "../types";
+import { handleGrpcError, validateRequired } from "../utils/errors";
+import {
   PageOptions,
   page,
   priority,
   duration,
   message as validateMessage,
   integer,
+  text,
 } from "../utils/contracts";
-import {
-  Duration,
-  Message as ProtoMessage,
-  QueueServiceTypes,
-} from "@nzovu/proto";
-import { Connection } from "../connection";
-import { Logger, defaultLogger } from "../logger";
-import { handleGrpcError, validateRequired } from "../utils/errors";
 
-/** Maximum consecutive heartbeat failures before stopping heartbeat */
-const MAX_HEARTBEAT_FAILURES = 3;
-
-/** Default heartbeat jitter percentage (±5%) */
-const HEARTBEAT_JITTER_PERCENT = 0.05;
-
-/**
- * Health status information for an active heartbeat
- */
+export interface LeaseClaim {
+  readonly queueName: string;
+  readonly messageId: string;
+  readonly workerId: string;
+  readonly attemptId: string;
+}
 export interface HeartbeatHealth {
   isActive: boolean;
   consecutiveFailures: number;
   lastError?: Error;
   failedAt?: Date;
 }
-
-/**
- * Context for tracking active heartbeats
- */
-interface HeartbeatContext {
-  stopHeartbeat: () => void;
-  workerId?: string;
-  attemptId?: string;
-  consecutiveFailures: number;
-  lastError?: Error;
-  failedAt?: Date;
-  onHeartbeatFailure?: (
-    messageId: string,
-    error: Error,
-    consecutiveFailures: number,
-  ) => void;
+interface ManagedClaim extends HeartbeatHealth {
+  claim: LeaseClaim;
+  timer?: ReturnType<typeof setTimeout>;
+  controller?: AbortController;
+  heartbeatPromise?: Promise<QueueServiceTypes.SendMessageHeartBeatResponse>;
+  onFailure?: (messageId: string, error: Error, failures: number) => void;
 }
 
-/**
- * Message client for message operations
- */
 export class MessageClient {
-  // Track active heartbeats by messageId with their context
-  private heartbeats: Map<string, HeartbeatContext> = new Map();
-
-  /** Optional client-level workerId used for all message operations */
-  private workerId?: string;
-
-  /** Logger instance for SDK logging */
-  private logger: Logger;
+  private readonly claims = new Map<string, ManagedClaim>();
+  private readonly operations = new Set<Promise<unknown>>();
+  private readonly controllers = new Set<AbortController>();
+  private reservations = 0;
+  private epoch = 0;
 
   constructor(
     private readonly connection: Connection,
-    workerId?: string,
-    logger?: Logger,
+    private workerId?: string,
+    private readonly logger: Logger = defaultLogger,
+    private readonly maxManagedClaims = 1000,
   ) {
-    this.workerId = workerId;
-    this.logger = logger || defaultLogger;
+    integer(maxManagedClaims, "maxManagedClaims", 1);
+    connection.onDisconnect?.(() => this.stopAllHeartbeats());
   }
-
-  /**
-   * Set the workerId for this client instance
-   */
   setWorkerId(workerId: string): void {
+    text(workerId, "workerId");
     this.workerId = workerId;
   }
-
-  /**
-   * Get the current workerId for this client instance
-   */
   getWorkerId(): string | undefined {
     return this.workerId;
   }
-
-  /**
-   * Calculate jittered interval for heartbeat to prevent thundering herd
-   */
-  private calculateJitteredInterval(intervalMs: number): number {
-    const jitterRange = intervalMs * HEARTBEAT_JITTER_PERCENT;
-    const jitter = (Math.random() * 2 - 1) * jitterRange; // Random between -jitterRange and +jitterRange
-    return Math.max(100, Math.floor(intervalMs + jitter)); // Minimum 100ms
+  private key(claim: LeaseClaim): string {
+    return JSON.stringify([
+      claim.queueName,
+      claim.messageId,
+      claim.workerId,
+      claim.attemptId,
+    ]);
   }
-
+  private claim(
+    queueName: string,
+    messageId: string,
+    workerId?: string,
+    attemptId?: string,
+  ): LeaseClaim {
+    text(queueName, "queueName");
+    text(messageId, "messageId");
+    text(workerId, "workerId");
+    text(attemptId, "attemptId");
+    return Object.freeze({ queueName, messageId, workerId, attemptId });
+  }
+  private rpc<K extends RpcMethod>(
+    method: K,
+    request: Request<K>,
+    controller = new AbortController(),
+  ): Promise<Response<K>> {
+    this.controllers.add(controller);
+    const promise = new Promise<Response<K>>((resolve, reject) => {
+      let done = false;
+      let handle: { cancel(): void } | undefined;
+      const finish = (error: Error | null, response?: Response<K>) => {
+        if (done) return;
+        done = true;
+        controller.signal.removeEventListener("abort", abort);
+        this.controllers.delete(controller);
+        if (error) reject(handleGrpcError(error));
+        else if (response == null)
+          reject(
+            new NzovuError(ErrorCode.DATA_LOSS, "Empty response from server"),
+          );
+        else resolve(response);
+      };
+      const abort = () => {
+        finish(
+          new NzovuError(ErrorCode.CANCELLED, "Claim operation cancelled"),
+        );
+        handle?.cancel();
+      };
+      controller.signal.addEventListener("abort", abort, { once: true });
+      if (controller.signal.aborted) {
+        abort();
+        return;
+      }
+      try {
+        const call = this.connection.getQueueServiceClient()[
+          method
+        ] as CallbackClient[K];
+        handle = (
+          call as (
+            request: Request<K>,
+            callback: (error: Error | null, response: Response<K>) => void,
+          ) => { cancel(): void }
+        )(request, finish);
+      } catch (error) {
+        finish(error as Error);
+      }
+    });
+    this.operations.add(promise);
+    void promise.then(
+      () => this.operations.delete(promise),
+      () => this.operations.delete(promise),
+    );
+    return promise;
+  }
   /**
    * Post a message to a queue
    */
@@ -209,230 +255,84 @@ export class MessageClient {
     });
   }
 
-  /**
-   * Get next message from a queue, with optional heartbeat monitoring
-   *
-   * @param queueName - Name of the queue to get message from
-   * @param leaseDuration - Optional lease duration for the message
-   * @param exclusivityKey - Optional exclusivity key for exclusive queues
-   * @param enableHeartbeat - Whether to enable automatic heartbeat monitoring
-   * @param heartbeatIntervalMs - Interval in ms for heartbeat (default: 1000)
-   * @param workerId - Optional workerId override (defaults to client-level workerId)
-   * @param onHeartbeatFailure - Optional callback invoked when heartbeat fails
-   */
   async getNextMessage(
     queueName: string,
     leaseDuration?: Duration,
     exclusivityKey?: string,
-    enableHeartbeat: boolean = false,
-    heartbeatIntervalMs: number = 1000,
+    enableHeartbeat = false,
+    heartbeatIntervalMs = 1000,
     workerId?: string,
     onHeartbeatFailure?: (
       messageId: string,
       error: Error,
-      consecutiveFailures: number,
+      failures: number,
     ) => void,
     attemptId?: string,
-  ): Promise<{
-    message?: ProtoMessage.Message;
-    workerId?: string;
-    attemptId?: string;
-    stopHeartbeat?: () => void;
-  }> {
-    validateRequired(queueName, "queueName");
-
+  ): Promise<
+    QueueServiceTypes.GetNextMessageResponse & {
+      claim?: LeaseClaim;
+      stopHeartbeat?: () => void;
+    }
+  > {
+    text(queueName, "queueName");
     duration(leaseDuration, "leaseDuration");
-
-    // Note: getNextMessage is NOT wrapped with retry because it modifies state (acquires lease)
-    // Retrying could lead to multiple lease acquisitions
-    const client = this.connection.getQueueServiceClient();
-    // Use provided workerId, fall back to client-level workerId
-    const effectiveWorkerId = workerId ?? this.workerId;
-
-    return new Promise((resolve, reject) => {
-      const request: QueueServiceTypes.GetNextMessageRequest = {
+    integer(heartbeatIntervalMs, "heartbeatIntervalMs", 100);
+    if (workerId !== undefined) text(workerId, "workerId");
+    if (attemptId !== undefined) text(attemptId, "attemptId");
+    if (this.claims.size + this.reservations >= this.maxManagedClaims)
+      throw new NzovuError(
+        ErrorCode.RESOURCE_EXHAUSTED,
+        "Maximum managed claims reached",
+      );
+    const epoch = this.epoch;
+    this.reservations++;
+    try {
+      const response = await this.rpc("getNextMessage", {
         queueName,
         leaseDuration,
-        exclusivityKey: exclusivityKey || "",
-        workerId: effectiveWorkerId,
+        exclusivityKey: exclusivityKey ?? "",
+        workerId: workerId ?? this.workerId,
         attemptId,
-      };
-
-      client.getNextMessage(request, (error, response) => {
-        if (!error && response == null) {
-          reject(new Error("Empty response from server"));
-          return;
-        }
-        if (error) {
-          reject(handleGrpcError(error));
-        } else {
-          const message = response?.message;
-          const responseWorkerId = response?.workerId;
-          const responseAttemptId = response?.attemptId;
-          let heartbeatTimer: ReturnType<typeof setInterval> | undefined;
-          let stopped = false;
-
-          // Heartbeat logic
-          const stopHeartbeat = () => {
-            if (heartbeatTimer) {
-              clearInterval(heartbeatTimer);
-              heartbeatTimer = undefined;
-              stopped = true;
-            }
-            // Remove from heartbeats map
-            if (message?.messageId) {
-              this.heartbeats.delete(message.messageId);
-            }
-          };
-
-          if (enableHeartbeat && message && message.messageId) {
-            // Start periodic heartbeat with jitter to prevent thundering herd
-            const jitteredInterval =
-              this.calculateJitteredInterval(heartbeatIntervalMs);
-            heartbeatTimer = setInterval(() => {
-              if (stopped) return;
-              const heartbeatReq: QueueServiceTypes.SendMessageHeartBeatRequest =
-                {
-                  queueName,
-                  messageId: message.messageId!,
-                  workerId: responseWorkerId,
-                  attemptId: responseAttemptId,
-                };
-              client.sendMessageHeartBeat(
-                heartbeatReq,
-                (err, heartbeatResponse) => {
-                  if (err) {
-                    // Get or initialize failure count
-                    const context = this.heartbeats.get(message.messageId!);
-                    if (!context) return; // Already stopped
-
-                    context.consecutiveFailures++;
-                    context.lastError = err;
-
-                    if (context.consecutiveFailures === 1) {
-                      context.failedAt = new Date();
-                    }
-
-                    // Classify error severity
-                    const isFatalError = this.isFatalHeartbeatError(err);
-
-                    // Log error with context
-                    this.logger.error(
-                      `Heartbeat error for messageId: ${message.messageId}`,
-                      `(failure ${context.consecutiveFailures}/${MAX_HEARTBEAT_FAILURES})`,
-                      err,
-                    );
-
-                    // Notify worker via callback
-                    if (context.onHeartbeatFailure) {
-                      try {
-                        context.onHeartbeatFailure(
-                          message.messageId!,
-                          err,
-                          context.consecutiveFailures,
-                        );
-                      } catch (callbackErr) {
-                        this.logger.warn(
-                          "Heartbeat failure callback threw error:",
-                          callbackErr,
-                        );
-                      }
-                    }
-
-                    // Stop heartbeat on fatal errors or max failures
-                    if (
-                      isFatalError ||
-                      context.consecutiveFailures >= MAX_HEARTBEAT_FAILURES
-                    ) {
-                      this.logger.warn(
-                        `Stopping heartbeat for messageId: ${message.messageId} - ` +
-                          (isFatalError
-                            ? "fatal error"
-                            : `${MAX_HEARTBEAT_FAILURES} consecutive failures`),
-                      );
-                      stopHeartbeat();
-                    }
-
-                    return;
-                  }
-
-                  // Reset failure count on success
-                  const context = this.heartbeats.get(message.messageId!);
-                  if (context) {
-                    context.consecutiveFailures = 0;
-                    context.lastError = undefined;
-                    context.failedAt = undefined;
-                  }
-
-                  // Check if lease has expired (state changed to ERRORED or PENDING)
-                  if (
-                    heartbeatResponse?.state ===
-                      ProtoMessage.Message_Metadata_State.ERRORED ||
-                    heartbeatResponse?.state ===
-                      ProtoMessage.Message_Metadata_State.PENDING
-                  ) {
-                    this.logger.warn(
-                      `Lease expired for message ${message.messageId} - state changed to ${heartbeatResponse.state}`,
-                    );
-                    stopHeartbeat(); // Stop sending heartbeats
-                    return;
-                  }
-
-                  // Log heartbeat success with remaining time
-                  if (heartbeatResponse?.remainingTime) {
-                    this.logger.debug(
-                      `Heartbeat OK: ${heartbeatResponse.remainingTime.seconds}s remaining (state: ${heartbeatResponse.state})`,
-                    );
-                  }
-                },
-              );
-            }, jitteredInterval);
-            // Store heartbeat context in the map for this messageId
-            this.heartbeats.set(message.messageId, {
-              stopHeartbeat,
-              workerId: responseWorkerId,
-              attemptId: responseAttemptId,
-              consecutiveFailures: 0,
-              lastError: undefined,
-              failedAt: undefined,
-              onHeartbeatFailure,
-            });
-          }
-
-          resolve({
-            message,
-            workerId: responseWorkerId,
-            attemptId: responseAttemptId,
-            stopHeartbeat: enableHeartbeat ? stopHeartbeat : undefined,
-          });
-        }
       });
-    });
+      if (epoch !== this.epoch)
+        throw new NzovuError(ErrorCode.CANCELLED, "Acquisition cancelled");
+      if (!response.message) return response;
+      if (!response.workerId || !response.attemptId)
+        throw new NzovuError(
+          ErrorCode.DATA_LOSS,
+          "Acquisition response lacks lease ownership",
+        );
+      const claim = this.claim(
+        queueName,
+        response.message.messageId,
+        response.workerId,
+        response.attemptId,
+      );
+      const key = this.key(claim);
+      let context = this.claims.get(key);
+      if (!context) {
+        context = {
+          claim,
+          isActive: enableHeartbeat,
+          consecutiveFailures: 0,
+          onFailure: onHeartbeatFailure,
+        };
+        this.claims.set(key, context);
+        if (enableHeartbeat)
+          this.scheduleHeartbeat(context, heartbeatIntervalMs);
+      }
+      return {
+        ...response,
+        claim,
+        stopHeartbeat: enableHeartbeat
+          ? () => this.stopHeartbeat(claim)
+          : undefined,
+      };
+    } finally {
+      this.reservations--;
+    }
   }
 
-  /**
-   * Check if a message has an active heartbeat
-   */
-  hasActiveHeartbeat(messageId: string): boolean {
-    return this.heartbeats.has(messageId);
-  }
-
-  /**
-   * Get heartbeat context for a message (for internal use)
-   */
-  getHeartbeatContext(messageId: string): HeartbeatContext | undefined {
-    return this.heartbeats.get(messageId);
-  }
-
-  /**
-   * Acknowledge a message
-   *
-   * @param queueName - Name of the queue
-   * @param messageId - Message ID to acknowledge
-   * @param state - Final state (COMPLETED or ERRORED)
-   * @param workerId - Optional workerId override
-   * @param attemptId - Optional attemptId override
-   */
   async acknowledgeMessage(
     queueName: string,
     messageId: string,
@@ -440,217 +340,196 @@ export class MessageClient {
     workerId?: string,
     attemptId?: string,
   ): Promise<boolean> {
-    validateRequired(queueName, "queueName");
-    validateRequired(messageId, "messageId");
-    validateRequired(state, "state");
-
-    // Stop heartbeat for this message if active and retrieve context
-    const heartbeatContext = this.heartbeats.get(messageId);
-    if (heartbeatContext) {
-      this.logger.debug("Stopping heartbeat for messageId:", messageId);
-      heartbeatContext.stopHeartbeat();
-      this.heartbeats.delete(messageId);
-
-      // Use context values if not explicitly provided
-      workerId = workerId ?? heartbeatContext.workerId;
-      attemptId = attemptId ?? heartbeatContext.attemptId;
-    }
-
-    // Fall back to client-level workerId if not provided
-    workerId = workerId ?? this.workerId;
-
-    return this.connection.withRetry(async () => {
-      const client = this.connection.getQueueServiceClient();
-
-      return new Promise<boolean>((resolve, reject) => {
-        const request: QueueServiceTypes.AcknowledgeMessageRequest = {
-          queueName,
-          messageId,
-          state,
-          workerId,
-          attemptId,
-        };
-
-        client.acknowledgeMessage(request, (error, response) => {
-          if (!error && response == null) {
-            reject(new Error("Empty response from server"));
-            return;
-          }
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.success || false);
-          }
-        });
+    const claim = this.claim(queueName, messageId, workerId, attemptId);
+    if (
+      state !== ProtoMessage.Message_Metadata_State.COMPLETED &&
+      state !== ProtoMessage.Message_Metadata_State.ERRORED
+    )
+      throw new NzovuError(
+        ErrorCode.INVALID_ARGUMENT,
+        "ACK state must be COMPLETED or ERRORED",
+      );
+    try {
+      const response = await this.rpc("acknowledgeMessage", {
+        ...claim,
+        state,
       });
-    });
+      if (response.success) this.releaseClaim(claim);
+      return response.success;
+    } catch (error) {
+      this.handleClaimError(claim, error as Error);
+      throw error;
+    }
   }
-
-  /**
-   * Cancel a message before processing
-   *
-   * @param queueName - Name of the queue
-   * @param messageId - Message ID to cancel
-   * @param reason - Optional reason for cancellation (for audit/logging)
-   */
   async cancelMessage(
     queueName: string,
     messageId: string,
     reason?: string,
   ): Promise<boolean> {
-    validateRequired(queueName, "queueName");
-    validateRequired(messageId, "messageId");
-
-    // Stop heartbeat for this message if active
-    const heartbeatContext = this.heartbeats.get(messageId);
-    if (heartbeatContext) {
-      this.logger.debug(
-        "Stopping heartbeat for cancelled messageId:",
-        messageId,
-      );
-      heartbeatContext.stopHeartbeat();
-      this.heartbeats.delete(messageId);
-    }
-
-    return this.connection.withRetry(async () => {
-      const client = this.connection.getQueueServiceClient();
-
-      return new Promise<boolean>((resolve, reject) => {
-        const request: QueueServiceTypes.CancelMessageRequest = {
-          queueName,
-          messageId,
-          reason,
-        };
-
-        client.cancelMessage(request, (error, response) => {
-          if (!error && response == null) {
-            reject(new Error("Empty response from server"));
-            return;
-          }
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.success || false);
-          }
-        });
-      });
+    text(queueName, "queueName");
+    text(messageId, "messageId");
+    const response = await this.rpc("cancelMessage", {
+      queueName,
+      messageId,
+      reason,
     });
+    if (response.success)
+      for (const context of this.claims.values())
+        if (
+          context.claim.queueName === queueName &&
+          context.claim.messageId === messageId
+        )
+          this.releaseClaim(context.claim);
+    return response.success;
   }
-
-  /**
-   * Send a heartbeat for a message manually
-   *
-   * @param queueName - Name of the queue
-   * @param messageId - Message ID to heartbeat
-   * @param workerId - Optional workerId override
-   * @param attemptId - Optional attemptId override
-   */
   async sendHeartbeat(
     queueName: string,
     messageId: string,
     workerId?: string,
     attemptId?: string,
-  ): Promise<{
-    remainingTime?: Duration;
-    state: ProtoMessage.Message_Metadata_State;
-  }> {
-    validateRequired(queueName, "queueName");
-    validateRequired(messageId, "messageId");
-
-    // Use heartbeat context values if available
-    const heartbeatContext = this.heartbeats.get(messageId);
-    if (heartbeatContext) {
-      workerId = workerId ?? heartbeatContext.workerId;
-      attemptId = attemptId ?? heartbeatContext.attemptId;
-    }
-
-    // Fall back to client-level workerId
-    workerId = workerId ?? this.workerId;
-
-    return this.connection.withRetry(async () => {
-      const client = this.connection.getQueueServiceClient();
-
-      return new Promise<{
-        remainingTime?: Duration;
-        state: ProtoMessage.Message_Metadata_State;
-      }>((resolve, reject) => {
-        const request: QueueServiceTypes.SendMessageHeartBeatRequest = {
-          queueName,
-          messageId,
-          workerId,
-          attemptId,
-        };
-
-        client.sendMessageHeartBeat(request, (error, response) => {
-          if (!error && response == null) {
-            reject(new Error("Empty response from server"));
-            return;
-          }
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve({
-              remainingTime: response?.remainingTime,
-              state: response.state,
-            });
-          }
-        });
-      });
-    });
+  ): Promise<QueueServiceTypes.SendMessageHeartBeatResponse> {
+    return this.heartbeat(
+      this.claim(queueName, messageId, workerId, attemptId),
+    );
   }
-
-  /**
-   * Renew message lease
-   */
+  private heartbeat(
+    claim: LeaseClaim,
+  ): Promise<QueueServiceTypes.SendMessageHeartBeatResponse> {
+    const context = this.claims.get(this.key(claim));
+    if (context?.heartbeatPromise) return context.heartbeatPromise;
+    const controller = new AbortController();
+    if (context) context.controller = controller;
+    const operation = this.rpc("sendMessageHeartBeat", claim, controller)
+      .then(
+        (response) => {
+          if (response.state !== ProtoMessage.Message_Metadata_State.RUNNING)
+            this.releaseClaim(claim);
+          return response;
+        },
+        (error) => {
+          this.handleClaimError(claim, error);
+          throw error;
+        },
+      )
+      .finally(() => {
+        if (context?.controller === controller) {
+          context.controller = undefined;
+          context.heartbeatPromise = undefined;
+        }
+      });
+    if (context) context.heartbeatPromise = operation;
+    return operation;
+  }
   async renewMessageLease(
     queueName: string,
     messageId: string,
     leaseDuration?: Duration,
     workerId?: string,
     attemptId?: string,
-  ): Promise<{
-    remainingTime?: Duration;
-    state: ProtoMessage.Message_Metadata_State;
-  }> {
-    validateRequired(queueName, "queueName");
-    validateRequired(messageId, "messageId");
-    validateRequired(workerId, "workerId");
-    validateRequired(attemptId, "attemptId");
+  ): Promise<QueueServiceTypes.RenewMessageLeaseResponse> {
+    const claim = this.claim(queueName, messageId, workerId, attemptId);
     duration(leaseDuration, "leaseDuration");
-
-    return this.connection.withRetry(async () => {
-      const client = this.connection.getQueueServiceClient();
-
-      return new Promise<{
-        remainingTime?: Duration;
-        state: ProtoMessage.Message_Metadata_State;
-      }>((resolve, reject) => {
-        const request: QueueServiceTypes.RenewMessageLeaseRequest = {
-          queueName,
-          messageId,
-          leaseDuration,
-          workerId,
-          attemptId,
-        };
-
-        client.renewMessageLease(request, (error, response) => {
-          if (!error && response == null) {
-            reject(new Error("Empty response from server"));
-            return;
-          }
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve({
-              remainingTime: response?.remainingTime,
-              state: response.state,
-            });
-          }
-        });
-      });
-    });
+    try {
+      return await this.rpc("renewMessageLease", { ...claim, leaseDuration });
+    } catch (error) {
+      this.handleClaimError(claim, error as Error);
+      throw error;
+    }
   }
-
+  private handleClaimError(claim: LeaseClaim, error: Error): void {
+    const normalized = handleGrpcError(error);
+    // The server prefixes ownership errors with the RPC operation.
+    const reason = normalized.message.replace(
+      /^failed to (?:acknowledge message|renew message lease|send message heartbeat): /,
+      "",
+    );
+    // Renewal exhaustion leaves the current claim valid.
+    if (
+      normalized.code === ErrorCode.NOT_FOUND ||
+      (normalized.code === ErrorCode.FAILED_PRECONDITION &&
+        [
+          "message is not running",
+          "message is owned by another attempt",
+          "message state changed during the operation",
+        ].includes(reason)) ||
+      (normalized.code === ErrorCode.DEADLINE_EXCEEDED &&
+        reason === "message lease has expired")
+    )
+      this.releaseClaim(claim);
+  }
+  private scheduleHeartbeat(context: ManagedClaim, interval: number): void {
+    if (
+      !context.isActive ||
+      this.claims.get(this.key(context.claim)) !== context
+    )
+      return;
+    context.timer = setTimeout(
+      async () => {
+        context.timer = undefined;
+        if (!context.isActive) return;
+        try {
+          await this.heartbeat(context.claim);
+          context.consecutiveFailures = 0;
+          context.lastError = undefined;
+          context.failedAt = undefined;
+        } catch (error) {
+          if (!context.isActive) return;
+          context.consecutiveFailures++;
+          context.lastError = error as Error;
+          context.failedAt ??= new Date();
+          try {
+            context.onFailure?.(
+              context.claim.messageId,
+              error as Error,
+              context.consecutiveFailures,
+            );
+          } catch {
+            this.logger.warn("Heartbeat failure callback threw");
+          }
+          if (context.consecutiveFailures >= 3)
+            this.stopHeartbeat(context.claim);
+        } finally {
+          this.scheduleHeartbeat(context, interval);
+        }
+      },
+      Math.max(100, Math.floor(interval * (0.95 + Math.random() * 0.1))),
+    );
+  }
+  hasActiveHeartbeat(claim: LeaseClaim): boolean {
+    return this.claims.get(this.key(claim))?.isActive ?? false;
+  }
+  getHeartbeatHealth(claim: LeaseClaim): HeartbeatHealth | undefined {
+    const context = this.claims.get(this.key(claim));
+    if (!context) return undefined;
+    return {
+      isActive: context.isActive,
+      consecutiveFailures: context.consecutiveFailures,
+      lastError: context.lastError,
+      failedAt: context.failedAt,
+    };
+  }
+  stopHeartbeat(claim: LeaseClaim): void {
+    const context = this.claims.get(this.key(claim));
+    if (!context) return;
+    context.isActive = false;
+    if (context.timer) clearTimeout(context.timer);
+    context.timer = undefined;
+    context.controller?.abort();
+  }
+  releaseClaim(claim: LeaseClaim): void {
+    this.stopHeartbeat(claim);
+    this.claims.delete(this.key(claim));
+  }
+  stopAllHeartbeats(): void {
+    ++this.epoch;
+    for (const context of this.claims.values())
+      this.stopHeartbeat(context.claim);
+    this.claims.clear();
+    for (const controller of [...this.controllers]) controller.abort();
+  }
+  async drain(): Promise<void> {
+    await Promise.allSettled([...this.operations]);
+  }
   /**
    * Peek queue messages without consuming
    */
@@ -694,69 +573,5 @@ export class MessageClient {
         },
       );
     });
-  }
-
-  /**
-   * Stop all active heartbeats (for graceful shutdown)
-   */
-  stopAllHeartbeats(): void {
-    this.logger.debug(`Stopping ${this.heartbeats.size} active heartbeats...`);
-
-    // Create array copy to avoid modification during iteration
-    const heartbeatEntries = Array.from(this.heartbeats.entries());
-
-    // Clear map first to prevent new heartbeats from being added
-    this.heartbeats.clear();
-
-    // Then stop all timers
-    for (const [messageId, context] of heartbeatEntries) {
-      try {
-        context.stopHeartbeat();
-      } catch (err) {
-        this.logger.warn(
-          `Error stopping heartbeat for messageId ${messageId}:`,
-          err,
-        );
-      }
-    }
-
-    this.logger.debug("All heartbeats stopped");
-  }
-
-  /**
-   * Get heartbeat health status for a message
-   * Returns undefined if no active heartbeat, otherwise status object
-   */
-  getHeartbeatHealth(messageId: string): HeartbeatHealth | undefined {
-    const context = this.heartbeats.get(messageId);
-    if (!context) return undefined;
-
-    return {
-      isActive: true,
-      consecutiveFailures: context.consecutiveFailures,
-      lastError: context.lastError,
-      failedAt: context.failedAt,
-    };
-  }
-
-  /**
-   * Classify if a heartbeat error is fatal (should stop heartbeat immediately)
-   */
-  private isFatalHeartbeatError(error: any): boolean {
-    // gRPC error codes that indicate connection failure
-    const fatalGrpcCodes = [
-      1, // CANCELLED - connection closed
-      13, // INTERNAL - server internal error
-      5, // NOT_FOUND - message/queue no longer exists
-      7, // PERMISSION_DENIED - auth failure
-      12, // UNIMPLEMENTED - server doesn't support heartbeat
-    ];
-    if (error.code && fatalGrpcCodes.includes(error.code)) {
-      return true;
-    }
-    // Check error message patterns
-    const fatalPatterns = [/channel.*closed/i, /connection.*closed/i];
-    const errorMessage = error.message || error.toString();
-    return fatalPatterns.some((pattern) => pattern.test(errorMessage));
   }
 }

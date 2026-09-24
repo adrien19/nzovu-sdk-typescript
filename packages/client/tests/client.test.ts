@@ -228,14 +228,24 @@ describe("MessageClient", () => {
 
   describe("heartbeat tracking", () => {
     it("should return false for hasActiveHeartbeat when no heartbeat exists", () => {
-      expect(messageClient.hasActiveHeartbeat("non-existent-message")).toBe(
-        false,
-      );
+      expect(
+        messageClient.hasActiveHeartbeat({
+          queueName: "q",
+          messageId: "missing",
+          workerId: "w",
+          attemptId: "a",
+        }),
+      ).toBe(false);
     });
 
     it("should return undefined for getHeartbeatHealth when no heartbeat exists", () => {
       expect(
-        messageClient.getHeartbeatHealth("non-existent-message"),
+        messageClient.getHeartbeatHealth({
+          queueName: "q",
+          messageId: "missing",
+          workerId: "w",
+          attemptId: "a",
+        }),
       ).toBeUndefined();
     });
 
