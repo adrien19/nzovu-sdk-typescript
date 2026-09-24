@@ -10,6 +10,7 @@ NC := \033[0m # No Color
 # Tools
 NPM := npm
 PNPM := pnpm
+FORMAT_FLAGS ?= --write
 NPX := npx
 TSC := $(NPX) tsc
 ESLINT := $(NPX) eslint
@@ -182,13 +183,13 @@ test-coverage: build-all
 # Install production dependencies
 install:
 	@echo "$(YELLOW)Installing production dependencies...$(NC)"
-	@$(PNPM) ci
+	@$(PNPM) install --prod --frozen-lockfile --ignore-scripts
 
 
 # Install all dependencies
 install-dev:
 	@echo "$(YELLOW)Installing all dependencies...$(NC)"
-	@$(PNPM) install
+	@$(PNPM) install --frozen-lockfile --ignore-scripts
 
 
 # Update dependencies
@@ -248,7 +249,7 @@ lint:
 # Format code
 format:
 	@echo "$(YELLOW)Formatting code with Prettier...$(NC)"
-	@$(PNPM) run format
+	@$(PNPM) exec prettier $(FORMAT_FLAGS) .
 	@echo "$(GREEN)Formatting complete!$(NC)"
 
 

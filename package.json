@@ -34,7 +34,9 @@
     "lint.prune": "ts-prune --error -p tsconfig.prune.json --ignore \"used in module\" --skip \".d.ts\"",
     "format": "pnpm prettier --write .",
     "clean": "node ./scripts/clean.mjs",
-    "docs": "cd packages/docs && pnpm run maybe-install-deps-and-build-docs"
+    "docs": "cd packages/docs && pnpm run maybe-install-deps-and-build-docs",
+    "prepack": "node scripts/block-release.mjs",
+    "prepublishOnly": "node scripts/block-release.mjs"
   },
   "dependencies": {
     "@chronoqueue/client": "workspace:*",
@@ -68,5 +70,6 @@
   "engines": {
     "node": ">= 18.0.0",
     "pnpm": ">= 10.16.0"
-  }
+  },
+  "packageManager": "pnpm@10.16.0"
 }

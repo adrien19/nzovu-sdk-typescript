@@ -1,6 +1,8 @@
 # ChronoQueue TypeScript SDK
 
-[![CI](https://github.com/adrien19/chronoqueue-typescript-sdk/actions/workflows/ci.yml/badge.svg)](https://github.com/adrien19/chronoqueue-typescript-sdk/actions/workflows/ci.yml)
+> CI, packaging and publishing are disabled. Run validation locally using the
+> [development setup](.devcontainer/README.md).
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 A TypeScript SDK for interacting with ChronoQueue, a distributed task scheduling and queue management system.
@@ -230,8 +232,7 @@ make help
 
 ## 📖 Documentation
 
-- **[CI/CD Workflows](.github/CI_WORKFLOWS.md)** - Comprehensive guide to GitHub Actions workflows
-- **[Quick CI Reference](.github/QUICK_CI_REFERENCE.md)** - Quick reference for common CI tasks
+- **[Local development](.devcontainer/README.md)** - Quick reference for common CI tasks
 - **[Bulk Message Posting](./docs/BULK_MESSAGE_POSTING.md)** - Guide to bulk posting with transaction modes
 - **[MCP Server](./packages/mcp/README.md)** - MCP server setup, tools reference, and IDE configuration
 - **[Testing Setup](./TESTING_SETUP_COMPLETE.md)** - Testing infrastructure documentation
@@ -326,50 +327,10 @@ Current test coverage (**225 tests total**):
 
 ## 📋 Releasing
 
-### Automated Releases
-
-Each package has its own release tag format. Push a package-specific tag to trigger automatic publishing:
-
-```bash
-# Proto package releases
-git tag v1.0.0-proto-release    # Published to npm with 'latest' tag
-git push origin v1.0.0-proto-release
-
-git tag v1.0.0-proto-beta       # Published to npm with 'beta' tag
-git push origin v1.0.0-proto-beta
-
-# Client package releases
-git tag v1.0.0-client-release   # Published to npm with 'latest' tag
-git push origin v1.0.0-client-release
-
-git tag v1.0.0-client-beta      # Published to npm with 'beta' tag
-git push origin v1.0.0-client-beta
-
-# MCP server package releases
-git tag v1.0.0-mcp-release      # Published to npm with 'latest' tag
-git push origin v1.0.0-mcp-release
-
-git tag v1.0.0-mcp-beta         # Published to npm with 'beta' tag
-git push origin v1.0.0-mcp-beta
-```
-
-**Tag Format Rules:**
-
-- Tags must follow the pattern: `vX.Y.Z-{proto,client,mcp}-{release,beta}`
-- `-release` suffix publishes to npm with the `latest` tag
-- `-beta` suffix publishes to npm with the `beta` tag
-- Each package gets its own GitHub Release entry
-
-### Manual Release
-
-Use the GitHub Actions workflow dispatch:
-
-1. Go to **Actions → Release**
-2. Click **Run workflow**
-3. Select package(s) to publish
-4. Choose npm dist-tag (latest, beta, etc.)
-
-See [CI/CD Workflows](.github/CI_WORKFLOWS.md) for detailed release documentation.
+Packaging and publication are disabled. All packages are private and lifecycle
+guards reject packaging/publishing. Workflows archived under
+`.github/disabled-workflows/` cannot execute. Run validation locally using the
+[development setup](.devcontainer/README.md).
 
 ## 🤝 Contributing
 
@@ -410,7 +371,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 For questions and support:
 
 - Open an [issue](https://github.com/adrien19/chronoqueue-typescript-sdk/issues)
-- Check existing [documentation](.github/CI_WORKFLOWS.md)
+- Check the [development setup](.devcontainer/README.md)
 
 ## 🗺️ Roadmap
 

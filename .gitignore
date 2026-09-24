@@ -37,3 +37,11 @@ tmp/
 temp/
 .vscode/
 .idea/
+
+# Local planning and validation documents
+/reports/
+/AGENTS.md
+/.github/disabled-workflows/README.md
+*[Mm][Ii][Gg][Rr][Aa][Tt][Ii][Oo][Nn]*.[Mm][Dd]
+/docs/*VALIDATION*.md
+*.tgz

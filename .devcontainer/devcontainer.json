@@ -1,98 +1,20 @@
 {
-  "name": "chronoqueue TypeScript Dev Container",
-  "context": "..",
-  "dockerFile": "Dockerfile",
-  // Set *default* container specific settings.json values on container create.
-  "customizations": {
-    // Configure properties specific to VS Code.
-    "vscode": {
-      "settings": {
-        "files.exclude": {
-          "**/node_modules": true,
-          "**/dist": true,
-          "**/.tsbuildinfo": true
-        },
-        "typescript.tsdk": "node_modules/typescript/lib",
-        "typescript.enablePromptUseWorkspaceTsdk": true,
-        "terminal.integrated.shell.linux": "/bin/bash",
-        "editor.formatOnSave": true,
-        "files.eol": "\n",
-        "files.autoSave": "onFocusChange",
-        "git.autorefresh": true,
-        "extensions.ignoreRecommendations": true,
-        "terminal.integrated.profiles.linux": {
-          "bash": {
-            "path": "bash"
-          },
-          "zsh": {
-            "path": "zsh"
-          },
-          "fish": {
-            "path": "fish"
-          },
-          "tmux": {
-            "path": "tmux",
-            "icon": "terminal-tmux"
-          },
-          "pwsh": {
-            "path": "pwsh",
-            "icon": "terminal-powershell"
-          }
-        },
-        "terminal.integrated.defaultProfile.linux": "bash",
-        "[typescript]": {
-          "editor.defaultFormatter": "vscode.typescript-language-features",
-          "diffEditor.ignoreTrimWhitespace": false,
-          "editor.formatOnSave": true,
-          "editor.formatOnPaste": false,
-          "editor.formatOnSaveMode": "file",
-          "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit",
-            "source.fixAll.eslint": "explicit"
-          }
-        },
-        "[javascript]": {
-          "editor.defaultFormatter": "vscode.typescript-language-features",
-          "diffEditor.ignoreTrimWhitespace": false,
-          "editor.formatOnSave": true,
-          "editor.formatOnPaste": false,
-          "editor.formatOnSaveMode": "file",
-          "editor.codeActionsOnSave": {
-            "source.organizeImports": "explicit",
-            "source.fixAll.eslint": "explicit"
-          }
-        },
-        "[json]": {
-          "editor.defaultFormatter": "vscode.json-language-features"
-        },
-        "[jsonc]": {
-          "editor.defaultFormatter": "vscode.json-language-features"
-        },
-        "eslint.validate": [
-          "javascript",
-          "javascriptreact",
-          "typescript",
-          "typescriptreact"
-        ]
-      },
-      "extensions": [
-        "dbaeumer.vscode-eslint",
-        "esbenp.prettier-vscode",
-        "eamodio.gitlens",
-        "GitHub.copilot",
-        "GitHub.copilot-chat",
-        "humao.rest-client",
-        "ms-vscode.vscode-typescript-next",
-        "DrBlury.protobuf-vsc"
-      ]
-    }
+  "name": "Nzovu TypeScript SDK and MCP",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
   },
-  "mounts": [
-    "type=bind,source=/var/run/docker.sock,target=/var/run/docker.sock"
-  ],
-  "postCreateCommand": "sudo chmod 666 /var/run/docker.sock && /bin/bash .devcontainer/postCreateCommand.sh",
   "workspaceFolder": "/workspace",
   "workspaceMount": "type=bind,source=${localWorkspaceFolder},target=/workspace",
-  "postAttachCommand": "git config --global --add safe.directory ${containerWorkspaceFolder}",
-  "remoteUser": "vscode"
+  "remoteUser": "node",
+  "postCreateCommand": "bash .devcontainer/postCreateCommand.sh",
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"],
+      "settings": {
+        "typescript.tsdk": "node_modules/typescript/lib",
+        "editor.formatOnSave": true
+      }
+    }
+  }
 }

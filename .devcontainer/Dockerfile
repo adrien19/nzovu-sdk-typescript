@@ -1,50 +1,5 @@
-FROM node:24-bullseye
+FROM node:22-bookworm@sha256:dd5847a04b0deee391fa145f1f4c6d214196668b6bcc7988ebed67249f226844
 
-# Avoid warnings by switching to noninteractive
-ENV DEBIAN_FRONTEND=noninteractive
-
-ARG USERNAME=vscode
-ARG USER_UID=1001
-ARG USER_GID=$USER_UID
-
-# Update and install prerequisites
-RUN apt-get update && apt-get install -y \
-    apt-transport-https \
-    ca-certificates \
-    curl \
-    gnupg \
-    gnupg-agent \
-    software-properties-common \
-    sudo \
-    && apt-get -y install --no-install-recommends apt-utils dialog 2>&1 \
-    # Verify git, process tools, lsb-release (common in install instructions for CLIs) installed
-    && apt-get -y install git openssh-client less iproute2 procps lsb-release \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/* \
-    #
-    # Add Docker's official GPG key and repository
-    && mkdir -p /etc/apt/keyrings \
-    && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
-    && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" \
-    | tee /etc/apt/sources.list.d/docker.list > /dev/null \
-    # Install Docker CI
-    && apt-get update && apt-get install -y docker-ce-cli && apt-get clean && rm -rf /var/lib/apt/lists/* \
-    #
-    # Install global npm packages
-    && npm install -g typescript ts-node eslint prettier pnpm \
-    #
-    # Create a non-root user `vscode` and add to `docker` group
-    && groupadd --gid $USER_GID $USERNAME \
-    && useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME \
-    && echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME \
-    && chmod 0440 /etc/sudoers.d/$USERNAME \
-    #
-    # Add `docker` group if it doesn't exist, then add `vscode` to it
-    && if ! getent group docker; then groupadd --gid 999 docker; fi \
-    && usermod -aG docker $USERNAME 
-
-# Switch back to dialog for any ad-hoc use of apt-get
-ENV DEBIAN_FRONTEND=dialog
-
-
-
+RUN npm install --global pnpm@10.16.0
+WORKDIR /workspace
+USER node

@@ -23,7 +23,9 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\""
+    "format": "prettier --write \"src/**/*.ts\"",
+    "prepack": "node ../../scripts/block-release.mjs",
+    "prepublishOnly": "node ../../scripts/block-release.mjs"
   },
   "keywords": [
     "chronoqueue",
@@ -64,5 +66,6 @@
     "url": "git+https://github.com/adrien19/chronoqueue-typescript-sdk.git",
     "directory": "packages/mcp"
   },
-  "homepage": "https://github.com/adrien19/chronoqueue-typescript-sdk/tree/main/packages/mcp"
+  "homepage": "https://github.com/adrien19/chronoqueue-typescript-sdk/tree/main/packages/mcp",
+  "private": true
 }
