@@ -47,7 +47,7 @@ export {
   Schedule,
   Schema,
 } from "@nzovu/proto";
-export type { Duration, LeasePolicy } from "@nzovu/proto";
+export type { Duration, LeasePolicy, Timestamp } from "@nzovu/proto";
 
 // Re-export Queue-specific types for easier access
 // MessageRetentionPolicy and MessageRetentionPolicy_Mode are available via Queue namespace
@@ -57,12 +57,12 @@ export type { Duration, LeasePolicy } from "@nzovu/proto";
 export {
   PostMessagesBulkResponse_MessagePostResult_ErrorCode as BulkMessageErrorCode,
   PostMessagesBulkRequest_TransactionMode as TransactionMode,
-} from "@nzovu/proto/lib/generated/proto/queueservice/v1/request_response";
+} from "@nzovu/proto";
 export type {
   PostMessagesBulkResponse_MessagePostResult as MessagePostResult,
   PostMessagesBulkRequest,
   PostMessagesBulkResponse,
-} from "@nzovu/proto/lib/generated/proto/queueservice/v1/request_response";
+} from "@nzovu/proto";
 
 // Re-export error utilities
 export {
@@ -71,3 +71,7 @@ export {
   validateRange,
   validateRequired,
 } from "./utils/errors";
+
+export type { PageOptions, ListOptions } from "./utils/contracts";
+
+export { timestampToISOString } from "./utils/timestamp";

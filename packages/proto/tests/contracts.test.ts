@@ -71,3 +71,16 @@ it("round-trips current pagination and claim ownership fields", () => {
     ),
   ).toEqual(claim);
 });
+
+it("preserves nanosecond timestamps in both wire and JSON round trips", () => {
+  const original =
+    QueueServiceTypes.PreviewCalendarScheduleResponse.fromPartial({
+      executionTimes: [{ seconds: "253402300799", nanos: 999999999 }],
+      previewStart: { seconds: "-1", nanos: 1 },
+      timezone: "UTC",
+      totalCount: 1,
+    });
+  const codec = QueueServiceTypes.PreviewCalendarScheduleResponse;
+  expect(codec.decode(codec.encode(original).finish())).toEqual(original);
+  expect(codec.fromJSON(codec.toJSON(original))).toEqual(original);
+});

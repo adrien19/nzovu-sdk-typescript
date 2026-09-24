@@ -1,3 +1,11 @@
+import {
+  ListOptions,
+  PageOptions,
+  page,
+  text,
+  integer,
+  schedule as validateSchedule,
+} from "../utils/contracts";
 import { Schedule as ProtoSchedule, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
@@ -12,7 +20,7 @@ export class ScheduleClient {
    * Create a schedule
    */
   async createSchedule(schedule: ProtoSchedule.Schedule): Promise<boolean> {
-    validateRequired(schedule, "schedule");
+    validateSchedule(schedule);
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
@@ -23,6 +31,10 @@ export class ScheduleClient {
         };
 
         client.createSchedule(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -51,6 +63,10 @@ export class ScheduleClient {
           };
 
           client.getSchedule(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
             if (error) {
               reject(handleGrpcError(error));
             } else {
@@ -65,25 +81,34 @@ export class ScheduleClient {
   /**
    * List schedules
    */
-  async listSchedules(prefix?: string): Promise<ProtoSchedule.Schedule[]> {
+  async listSchedules(
+    options: ListOptions = {},
+  ): Promise<QueueServiceTypes.ListSchedulesResponse> {
+    const paging = page(options);
+    text(options.prefix ?? "", "prefix", false);
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<ProtoSchedule.Schedule[]>((resolve, reject) => {
-        const request: QueueServiceTypes.ListSchedulesRequest = {
-          prefix: prefix || "",
-          pageSize: 0,
-          pageToken: "",
-        };
+      return new Promise<QueueServiceTypes.ListSchedulesResponse>(
+        (resolve, reject) => {
+          const request: QueueServiceTypes.ListSchedulesRequest = {
+            prefix: options.prefix ?? "",
+            ...paging,
+          };
 
-        client.listSchedules(request, (error, response) => {
-          if (error) {
-            reject(handleGrpcError(error));
-          } else {
-            resolve(response?.schedules || []);
-          }
-        });
-      });
+          client.listSchedules(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
+            if (error) {
+              reject(handleGrpcError(error));
+            } else {
+              resolve(response);
+            }
+          });
+        },
+      );
     });
   }
 
@@ -102,6 +127,10 @@ export class ScheduleClient {
         };
 
         client.deleteSchedule(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -127,6 +156,10 @@ export class ScheduleClient {
         };
 
         client.pauseSchedule(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -152,6 +185,10 @@ export class ScheduleClient {
         };
 
         client.resumeSchedule(request, (error, response) => {
+          if (!error && response == null) {
+            reject(new Error("Empty response from server"));
+            return;
+          }
           if (error) {
             reject(handleGrpcError(error));
           } else {
@@ -166,34 +203,72 @@ export class ScheduleClient {
    * Get schedule execution history
    *
    * @param scheduleId - The schedule ID to get history for
-   * @param limit - Maximum number of history records to return (default: 100)
+   * @param options - Page size (0 uses server default) and opaque continuation token
    */
   async getScheduleHistory(
     scheduleId: string,
-    limit?: number,
-  ): Promise<ProtoSchedule.ScheduleHistory | undefined> {
+    options: PageOptions = {},
+  ): Promise<QueueServiceTypes.GetScheduleHistoryResponse> {
     validateRequired(scheduleId, "scheduleId");
+    const paging = page(options);
 
     return this.connection.withRetry(async () => {
       const client = this.connection.getQueueServiceClient();
 
-      return new Promise<ProtoSchedule.ScheduleHistory | undefined>(
+      return new Promise<QueueServiceTypes.GetScheduleHistoryResponse>(
         (resolve, reject) => {
           const request: QueueServiceTypes.GetScheduleHistoryRequest = {
             scheduleId,
-            pageSize: limit ?? 100,
-            pageToken: "",
+            ...paging,
           };
 
           client.getScheduleHistory(request, (error, response) => {
+            if (!error && response == null) {
+              reject(new Error("Empty response from server"));
+              return;
+            }
             if (error) {
               reject(handleGrpcError(error));
             } else {
-              resolve(response?.scheduleHistory);
+              resolve(response);
             }
           });
         },
       );
+    });
+  }
+  async validateCalendarSchedule(
+    calendarSchedule: ProtoSchedule.CalendarSchedule,
+  ): Promise<QueueServiceTypes.ValidateCalendarScheduleResponse> {
+    validateRequired(calendarSchedule, "calendarSchedule");
+    return new Promise((resolve, reject) => {
+      this.connection
+        .getQueueServiceClient()
+        .validateCalendarSchedule({ calendarSchedule }, (error, result) => {
+          if (error) reject(handleGrpcError(error));
+          else if (!result) reject(new Error("Empty response from server"));
+          else resolve(result);
+        });
+    });
+  }
+
+  async previewCalendarSchedule(
+    calendarSchedule: ProtoSchedule.CalendarSchedule,
+    count = 0,
+  ): Promise<QueueServiceTypes.PreviewCalendarScheduleResponse> {
+    validateRequired(calendarSchedule, "calendarSchedule");
+    integer(count, "count");
+    return new Promise((resolve, reject) => {
+      this.connection
+        .getQueueServiceClient()
+        .previewCalendarSchedule(
+          { calendarSchedule, count },
+          (error, result) => {
+            if (error) reject(handleGrpcError(error));
+            else if (!result) reject(new Error("Empty response from server"));
+            else resolve(result);
+          },
+        );
     });
   }
 }

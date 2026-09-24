@@ -342,12 +342,14 @@ export const renewMessageLeaseTool: Tool = {
         type: 'string',
         description: 'Message identifier',
       },
+      worker_id: { type: 'string', description: 'Worker returned by message acquisition' },
+      attempt_id: { type: 'string', description: 'Attempt returned by message acquisition' },
       lease_duration: {
         type: 'string',
         description: 'New lease duration (e.g., "5m")',
       },
     },
-    required: ['queue_name', 'message_id'],
+    required: ['queue_name', 'message_id', 'worker_id', 'attempt_id'],
   },
 };
 
@@ -547,7 +549,7 @@ export const getDLQMessagesTool: Tool = {
 
 export const requeueFromDLQTool: Tool = {
   name: 'requeue_from_dlq',
-  description: 'Requeue a message from DLQ back to the original or target queue',
+  description: 'Requeue a message from DLQ to an explicit target queue',
   inputSchema: {
     type: 'object',
     properties: {
@@ -561,10 +563,10 @@ export const requeueFromDLQTool: Tool = {
       },
       target_queue: {
         type: 'string',
-        description: 'Target queue name (defaults to original queue)',
+        description: 'Required destination queue name',
       },
     },
-    required: ['dlq_name', 'message_id'],
+    required: ['dlq_name', 'message_id', 'target_queue'],
   },
 };
 

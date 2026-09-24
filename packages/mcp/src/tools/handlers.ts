@@ -4,7 +4,7 @@
  * Implements the actual logic for each MCP tool
  */
 
-import { NzovuClient, Message, Queue } from '@nzovu/client';
+import { NzovuClient, Message, Queue, timestampToISOString } from '@nzovu/client';
 import { parseDuration } from '../config.js';
 import {
   AcknowledgeMessageInput,
@@ -266,7 +266,7 @@ async function handleDeleteQueue(args: DeleteQueueInput, client: NzovuClient): P
 
 async function handleListQueues(args: ListQueuesInput, client: NzovuClient): Promise<string> {
   const prefix = args.prefix || '';
-  const queues = await client.queues.listQueues(prefix);
+  const { queues } = await client.queues.listQueues({ prefix });
 
   if (queues.length === 0) {
     return prefix ? `No queues found with prefix '${prefix}'` : 'No queues found';
@@ -556,7 +556,9 @@ Content Type: ${contentType}`;
 
 async function handlePeekMessages(args: PeekMessagesInput, client: NzovuClient): Promise<string> {
   const limit = args.limit || 10;
-  const messages = await client.messages.peekQueueMessages(args.queue_name, limit.toString());
+  const { messages } = await client.messages.peekQueueMessages(args.queue_name, {
+    pageSize: limit,
+  });
 
   if (messages.length === 0) {
     return `No messages in queue '${args.queue_name}'`;
@@ -627,7 +629,9 @@ async function handleRenewMessageLease(
   const response = await client.messages.renewMessageLease(
     args.queue_name,
     args.message_id,
-    duration
+    duration,
+    args.worker_id,
+    args.attempt_id
   );
 
   const remainingSeconds = response.remainingTime?.seconds
@@ -750,7 +754,7 @@ Enabled: ${args.enabled !== false ? 'Yes' : 'No'}`;
 
 async function handleListSchedules(args: ListSchedulesInput, client: NzovuClient): Promise<string> {
   const prefix = args.prefix || '';
-  const schedules = await client.schedules.listSchedules(prefix);
+  const { schedules } = await client.schedules.listSchedules({ prefix });
 
   if (schedules.length === 0) {
     return prefix ? `No schedules found with prefix '${prefix}'` : 'No schedules found';
@@ -770,7 +774,7 @@ async function handleListSchedules(args: ListSchedulesInput, client: NzovuClient
     }
 
     result += `  State: ${metadata?.state || 'UNKNOWN'}\n`;
-    result += `  Created: ${metadata?.createdAt?.toISOString() || 'N/A'}\n\n`;
+    result += `  Created: ${timestampToISOString(metadata?.createdAt) || 'N/A'}\n\n`;
   }
 
   return result;
@@ -839,12 +843,12 @@ async function handleGetSchedule(args: GetScheduleInput, client: NzovuClient): P
   }
 
   if (metadata?.nextRun) {
-    result += `Next Run: ${metadata.nextRun.toISOString()}\n`;
+    result += `Next Run: ${timestampToISOString(metadata.nextRun)}\n`;
   }
   if (metadata?.lastRun) {
-    result += `Last Run: ${metadata.lastRun.toISOString()}\n`;
+    result += `Last Run: ${timestampToISOString(metadata.lastRun)}\n`;
   }
-  result += `Created: ${metadata?.createdAt?.toISOString() || 'N/A'}\n`;
+  result += `Created: ${timestampToISOString(metadata?.createdAt) || 'N/A'}\n`;
 
   return result;
 }
@@ -866,7 +870,9 @@ async function handleGetScheduleHistory(
   args: GetScheduleHistoryInput,
   client: NzovuClient
 ): Promise<string> {
-  const history = await client.schedules.getScheduleHistory(args.schedule_id, args.limit || 100);
+  const { scheduleHistory: history } = await client.schedules.getScheduleHistory(args.schedule_id, {
+    pageSize: args.limit ?? 0,
+  });
 
   if (!history) {
     return `No history found for schedule '${args.schedule_id}'`;
@@ -876,16 +882,16 @@ async function handleGetScheduleHistory(
   result += `Messages Created: ${history.messages?.length || 0}\n`;
 
   if (history.nextRun) {
-    result += `Next Run: ${history.nextRun.toISOString()}\n`;
+    result += `Next Run: ${timestampToISOString(history.nextRun)}\n`;
   }
   if (history.lastRun) {
-    result += `Last Run: ${history.lastRun.toISOString()}\n`;
+    result += `Last Run: ${timestampToISOString(history.lastRun)}\n`;
   }
   if (history.createdAt) {
-    result += `Created: ${history.createdAt.toISOString()}\n`;
+    result += `Created: ${timestampToISOString(history.createdAt)}\n`;
   }
   if (history.updatedAt) {
-    result += `Updated: ${history.updatedAt.toISOString()}\n`;
+    result += `Updated: ${timestampToISOString(history.updatedAt)}\n`;
   }
 
   if (history.messages && history.messages.length > 0) {
@@ -907,7 +913,9 @@ async function handleGetDLQMessages(
   args: GetDLQMessagesInput,
   client: NzovuClient
 ): Promise<string> {
-  const messages = await client.dlq.getDLQMessages(args.dlq_name, args.limit || 10);
+  const { messages } = await client.dlq.getDLQMessages(args.dlq_name, {
+    pageSize: args.limit ?? 0,
+  });
 
   if (messages.length === 0) {
     return `No messages in DLQ '${args.dlq_name}'`;
@@ -1010,7 +1018,7 @@ ${(() => {
 }
 
 async function handleListSchemas(args: ListSchemasInput, client: NzovuClient): Promise<string> {
-  const schemas = await client.schemas.listSchemas({
+  const { schemas } = await client.schemas.listSchemas({
     prefix: args.prefix,
     activeOnly: !args.include_all_versions,
   });

@@ -62,8 +62,10 @@ const request = QueueServiceTypes.PostMessageRequest.fromPartial({
 
 Int64 values use strings; bytes use `Uint8Array` (Node `Buffer` is accepted as
 input). Optional scalar presence is retained, including explicit zero renewal
-limits. Durations contain seconds/nanos. Timestamp fields currently use `Date`,
-which has millisecond precision; do not assume nanosecond preservation for dates.
+limits. Durations and timestamps contain `{ seconds: string, nanos: number }`.
+Timestamp wire and generated JSON codecs preserve nanoseconds; JSON uses the raw
+seconds/nanos object, not protobuf JSON ISO strings. Use the client
+`timestampToISOString()` helper when an exact ISO timestamp is needed.
 
 Both CommonJS `require('@nzovu/proto')` and ESM imports from the built package are
 supported. Type declarations are emitted alongside CommonJS output in `lib/`.

@@ -130,7 +130,7 @@ export function generate(check = false, root = ROOT) {
       [
         `--plugin=protoc-gen-ts_proto=${join(bin, "protoc-gen-ts_proto")}`,
         `--ts_proto_out=${output}`,
-        "--ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,forceLong=string,useOptionals=messages",
+        "--ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,forceLong=string,useOptionals=messages,useDate=false,useJsonTimestamp=raw",
         `-I${root}`,
         ...Object.keys(manifest.files).sort(),
       ],
