@@ -1,10 +1,10 @@
-# ChronoQueue MCP Server
+# Nzovu MCP Server
 
-Integrate ChronoQueue with AI assistants via the Model Context Protocol (MCP).
+Integrate Nzovu with AI assistants via the Model Context Protocol (MCP).
 
 ## What is this?
 
-The ChronoQueue MCP Server exposes ChronoQueue's task queue operations as AI-accessible tools through the Model Context Protocol. This allows AI assistants like Claude to:
+The Nzovu MCP Server exposes Nzovu's task queue operations as AI-accessible tools through the Model Context Protocol. This allows AI assistants like Claude to:
 
 - Create and manage task queues
 - Post and retrieve messages
@@ -18,10 +18,10 @@ The ChronoQueue MCP Server exposes ChronoQueue's task queue operations as AI-acc
 
 ```bash
 # From npm (once published)
-npm install -g @chronoqueue/mcp-server
+npm install -g @nzovu/mcp-server
 
 # Or run directly with npx
-npx @chronoqueue/mcp-server
+npx @nzovu/mcp-server
 ```
 
 ### Local Development
@@ -40,12 +40,12 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 ```json
 {
   "mcpServers": {
-    "chronoqueue": {
+    "nzovu": {
       "command": "npx",
-      "args": ["-y", "@chronoqueue/mcp-server"],
+      "args": ["-y", "@nzovu/mcp-server"],
       "env": {
-        "CHRONOQUEUE_ADDRESS": "localhost:9000",
-        "CHRONOQUEUE_INSECURE": "true"
+        "NZOVU_ADDRESS": "localhost:9000",
+        "NZOVU_INSECURE": "true"
       }
     }
   }
@@ -60,12 +60,12 @@ Add to `.vscode/mcp.json` in your workspace:
 {
   "github.copilot.chat.mcp": {
     "servers": {
-      "chronoqueue": {
+      "nzovu": {
         "command": "node",
         "args": ["${workspaceFolder}/mcp/dist/index.js"],
         "env": {
-          "CHRONOQUEUE_ADDRESS": "localhost:9000",
-          "CHRONOQUEUE_INSECURE": "true"
+          "NZOVU_ADDRESS": "localhost:9000",
+          "NZOVU_INSECURE": "true"
         }
       }
     }
@@ -82,12 +82,12 @@ Add to `.cursor/mcp.json` in your workspace:
 ```json
 {
   "mcpServers": {
-    "chronoqueue": {
+    "nzovu": {
       "command": "node",
       "args": ["./dist/index.js"],
       "cwd": "${workspaceFolder}/mcp",
       "env": {
-        "CHRONOQUEUE_ADDRESS": "localhost:9000"
+        "NZOVU_ADDRESS": "localhost:9000"
       }
     }
   }
@@ -96,7 +96,7 @@ Add to `.cursor/mcp.json` in your workspace:
 
 ## Available Tools
 
-The MCP server exposes **13 tools** for interacting with ChronoQueue:
+The MCP server exposes **13 tools** for interacting with Nzovu:
 
 ### Queue Management (4 tools)
 
@@ -248,14 +248,14 @@ Arguments:
 
 Environment variables:
 
-| Variable                | Description                | Default          |
-| ----------------------- | -------------------------- | ---------------- |
-| `CHRONOQUEUE_ADDRESS`   | ChronoQueue server address | `localhost:9000` |
-| `CHRONOQUEUE_INSECURE`  | Use insecure connection    | `true`           |
-| `CHRONOQUEUE_CERT_PATH` | Path to client certificate | -                |
-| `CHRONOQUEUE_KEY_PATH`  | Path to client key         | -                |
-| `CHRONOQUEUE_CA_PATH`   | Path to CA certificate     | -                |
-| `CHRONOQUEUE_TIMEOUT`   | Operation timeout          | `30s`            |
+| Variable          | Description                | Default          |
+| ----------------- | -------------------------- | ---------------- |
+| `NZOVU_ADDRESS`   | Nzovu server address       | `localhost:9000` |
+| `NZOVU_INSECURE`  | Use insecure connection    | `true`           |
+| `NZOVU_CERT_PATH` | Path to client certificate | -                |
+| `NZOVU_KEY_PATH`  | Path to client key         | -                |
+| `NZOVU_CA_PATH`   | Path to CA certificate     | -                |
+| `NZOVU_TIMEOUT`   | Operation timeout          | `30s`            |
 
 ## Usage Examples
 
@@ -329,9 +329,9 @@ mcp/
 │   ├── index.ts              # Entry point
 │   ├── server.ts             # MCP server setup
 │   ├── config.ts             # Configuration management
-│   ├── chronoqueue-client.ts # gRPC client wrapper
+│   ├── nzovu-client.ts # gRPC client wrapper
 │   ├── types/
-│   │   └── chronoqueue.ts    # Type definitions
+│   │   └── nzovu.ts    # Type definitions
 │   └── tools/
 │       ├── index.ts          # Tool registry
 │       └── handlers.ts       # Tool implementations
@@ -410,19 +410,19 @@ npm run test:coverage # Run with coverage report
 
 ### Connection Issues
 
-**Problem**: Cannot connect to ChronoQueue server
+**Problem**: Cannot connect to Nzovu server
 
 **Solution**:
 
-1. Verify ChronoQueue is running: `ps aux | grep chronoqueue`
-2. Check address: `CHRONOQUEUE_ADDRESS=localhost:9000` (default ChronoQueue port)
-3. For remote servers, set `CHRONOQUEUE_INSECURE=false` and provide certificates
+1. Verify Nzovu is running: `ps aux | grep nzovu`
+2. Check address: `NZOVU_ADDRESS=localhost:9000` (default Nzovu port)
+3. For remote servers, set `NZOVU_INSECURE=false` and provide certificates
 
 ### Proto Loading Errors
 
 **Problem**: Cannot find proto files
 
-**Solution**: Ensure proto files are symlinked or copied from main ChronoQueue repo:
+**Solution**: Ensure proto files are symlinked or copied from main Nzovu repo:
 
 ```bash
 cd mcp
@@ -437,11 +437,11 @@ ln -s ../proto proto
 
 1. Restart Claude Desktop after config changes
 2. Check server logs in Claude's developer console
-3. Verify npx can access the package: `npx @chronoqueue/mcp-server --help`
+3. Verify npx can access the package: `npx @nzovu/mcp-server --help`
 
 ## Contributing
 
-See main [ChronoQueue CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
+See main [Nzovu CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
 
 ## License
 
@@ -449,6 +449,6 @@ MIT - See [LICENSE](../LICENSE) for details.
 
 ## Links
 
-- [ChronoQueue GitHub](https://github.com/adrien19/chronoqueue)
+- [Nzovu GitHub](https://github.com/adrien19/nzovu)
 - [Model Context Protocol](https://modelcontextprotocol.io)
 - [Claude Desktop](https://claude.ai/download)

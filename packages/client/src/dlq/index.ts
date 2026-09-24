@@ -1,4 +1,4 @@
-import { Message as ProtoMessage, QueueServiceTypes } from "@chronoqueue/proto";
+import { Message as ProtoMessage, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
 
@@ -36,7 +36,8 @@ export class DLQClient {
       return new Promise<ProtoMessage.Message[]>((resolve, reject) => {
         const request: QueueServiceTypes.GetDLQMessagesRequest = {
           dlqName,
-          limit: limit || 10,
+          pageSize: limit ?? 10,
+          pageToken: "",
         };
 
         client.getDlqMessages(request, (error, response) => {

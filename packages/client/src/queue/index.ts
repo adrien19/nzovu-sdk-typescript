@@ -1,4 +1,4 @@
-import { Queue as ProtoQueue, QueueServiceTypes } from "@chronoqueue/proto";
+import { Queue as ProtoQueue, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
 
@@ -116,6 +116,8 @@ export class QueueClient {
       return new Promise<ProtoQueue.Queue[]>((resolve, reject) => {
         const request: QueueServiceTypes.ListQueuesRequest = {
           prefix: prefix || "",
+          pageSize: 0,
+          pageToken: "",
         };
 
         client.listQueues(request, (error, response) => {

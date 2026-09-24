@@ -1,7 +1,7 @@
 /**
  * Agent Worker
  *
- * Consumes tasks from ChronoQueue and executes them using registered handlers.
+ * Consumes tasks from Nzovu and executes them using registered handlers.
  * Demonstrates:
  * - Message consumption with lease management
  * - Heartbeat for long-running tasks
@@ -9,7 +9,7 @@
  * - Error handling and acknowledgment
  */
 
-import { ChronoQueueClient, Message } from "@chronoqueue/client";
+import { NzovuClient, Message } from "@nzovu/client";
 import { executeTask, type HandlerContext } from "./handlers.js";
 import {
   TaskStatus,
@@ -22,7 +22,7 @@ import {
 const defaultConfig: WorkerConfig = {
   workerId: `worker-${process.pid}-${Date.now().toString(36)}`,
   queueName: process.env.QUEUE_NAME || "agent-tasks",
-  serverAddress: process.env.CHRONOQUEUE_ADDRESS || "host.docker.internal:9000",
+  serverAddress: process.env.NZOVU_ADDRESS || "host.docker.internal:9000",
   concurrency: 1,
   pollIntervalMs: 1000,
   enableHeartbeat: true,
@@ -34,7 +34,7 @@ const defaultConfig: WorkerConfig = {
  * Agent Worker class
  */
 class AgentWorker {
-  private client: ChronoQueueClient;
+  private client: NzovuClient;
   private config: WorkerConfig;
   private stats: WorkerStats;
   private running = false;
@@ -43,7 +43,7 @@ class AgentWorker {
 
   constructor(config: Partial<WorkerConfig> = {}) {
     this.config = { ...defaultConfig, ...config };
-    this.client = new ChronoQueueClient({
+    this.client = new NzovuClient({
       connection: {
         address: this.config.serverAddress,
       },

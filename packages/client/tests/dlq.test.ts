@@ -42,7 +42,7 @@ describe("DLQClient", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     mockClient = createMockClient();
 
@@ -74,7 +74,8 @@ describe("DLQClient", () => {
       expect(mockClient.getDlqMessages).toHaveBeenCalledWith(
         expect.objectContaining({
           dlqName: "test-queue-dlq",
-          limit: 10,
+          pageSize: 10,
+          pageToken: "",
         }),
         expect.any(Function),
       );
@@ -89,7 +90,8 @@ describe("DLQClient", () => {
       expect(mockClient.getDlqMessages).toHaveBeenCalledWith(
         expect.objectContaining({
           dlqName: "test-queue-dlq",
-          limit: 50,
+          pageSize: 50,
+          pageToken: "",
         }),
         expect.any(Function),
       );

@@ -5,7 +5,7 @@
  * that take longer than the initial base lease by extending via heartbeats.
  */
 
-import { ChronoQueueClient, Message } from "@chronoqueue/client";
+import { NzovuClient, Message } from "@nzovu/client";
 
 async function processLongRunningTask(
   message: any,
@@ -30,7 +30,7 @@ async function processLongRunningTask(
 }
 
 async function main() {
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
   });
   await client.connect();

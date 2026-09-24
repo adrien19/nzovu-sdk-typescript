@@ -1,12 +1,12 @@
 # Agent Worker Example
 
-A demonstration of using ChronoQueue as a task orchestration system for agent workers.
+A demonstration of using Nzovu as a task orchestration system for agent workers.
 
 ## Overview
 
-This example shows how to build an agent-based task execution system using ChronoQueue:
+This example shows how to build an agent-based task execution system using Nzovu:
 
-- **Producer**: Posts tasks to ChronoQueue with priorities
+- **Producer**: Posts tasks to Nzovu with priorities
 - **Worker**: Consumes and executes tasks with lease management and heartbeats
 - **Handlers**: Pluggable task handlers for different task types
 
@@ -25,7 +25,7 @@ This example shows how to build an agent-based task execution system using Chron
 
 ```
 ┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Producer  │────▶│  ChronoQueue │────▶│   Worker    │
+│   Producer  │────▶│  Nzovu │────▶│   Worker    │
 │             │     │              │     │             │
 │ Posts tasks │     │ • Priority   │     │ • Consume   │
 │ with        │     │   ordering   │     │ • Execute   │
@@ -43,9 +43,9 @@ cd packages/examples/agent-worker
 pnpm install
 ```
 
-### 2. Start ChronoQueue Server
+### 2. Start Nzovu Server
 
-Make sure ChronoQueue is running on `localhost:50051` (or set `CHRONOQUEUE_ADDRESS`).
+Make sure Nzovu is running on `localhost:9000` (or set `NZOVU_ADDRESS`).
 
 ### 3. Run the Producer
 
@@ -67,11 +67,11 @@ pnpm start:worker
 
 ### Environment Variables
 
-| Variable              | Default           | Description                |
-| --------------------- | ----------------- | -------------------------- |
-| `CHRONOQUEUE_ADDRESS` | `localhost:50051` | ChronoQueue server address |
-| `QUEUE_NAME`          | `agent-tasks`     | Queue to use               |
-| `CONCURRENCY`         | `1`               | Max concurrent tasks       |
+| Variable        | Default          | Description          |
+| --------------- | ---------------- | -------------------- |
+| `NZOVU_ADDRESS` | `localhost:9000` | Nzovu server address |
+| `QUEUE_NAME`    | `agent-tasks`    | Queue to use         |
+| `CONCURRENCY`   | `1`              | Max concurrent tasks |
 
 ### Worker Configuration
 
@@ -79,7 +79,7 @@ pnpm start:worker
 const worker = new AgentWorker({
   workerId: "my-worker",
   queueName: "agent-tasks",
-  serverAddress: "localhost:50051",
+  serverAddress: "localhost:9000",
   concurrency: 4,
   pollIntervalMs: 1000,
   enableHeartbeat: true,
@@ -155,7 +155,7 @@ Tasks are processed by priority (higher first):
 ### Error Handling
 
 - Tasks that throw errors don't get acknowledged
-- ChronoQueue automatically retries (up to max_attempts)
+- Nzovu automatically retries (up to max_attempts)
 - Failed tasks eventually go to Dead Letter Queue
 
 ## Extending

@@ -1,9 +1,9 @@
 /**
  * Trip Planner Worker
- * Processes trip planning requests from ChronoQueue
+ * Processes trip planning requests from Nzovu
  */
 
-import { ChronoQueueClient, Message } from "@chronoqueue/client";
+import { NzovuClient, Message } from "@nzovu/client";
 import {
   Accommodation,
   Activity,
@@ -18,17 +18,16 @@ import {
 } from "./types";
 
 const QUEUE_NAME = "trip-planning-requests";
-const SERVER_ADDRESS =
-  process.env.CHRONOQUEUE_SERVER || "host.docker.internal:9000";
+const SERVER_ADDRESS = process.env.NZOVU_SERVER || "host.docker.internal:9000";
 const WORKER_ID = `worker-${process.pid}`;
 
 class TripPlannerWorker {
-  private client: ChronoQueueClient;
+  private client: NzovuClient;
   private stats: WorkerStats;
   private running: boolean = false;
 
   constructor() {
-    this.client = new ChronoQueueClient({
+    this.client = new NzovuClient({
       connection: { address: SERVER_ADDRESS },
       workerId: WORKER_ID,
     });

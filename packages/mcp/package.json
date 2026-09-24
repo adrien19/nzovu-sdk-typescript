@@ -1,12 +1,12 @@
 {
-  "name": "@chronoqueue/mcp-server",
-  "version": "0.1.0",
-  "description": "ChronoQueue MCP Server - Integrate ChronoQueue with AI assistants via Model Context Protocol",
+  "name": "@nzovu/mcp-server",
+  "version": "0.0.1-dev.0",
+  "description": "Nzovu MCP Server - Integrate Nzovu with AI assistants via Model Context Protocol",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "chronoqueue-mcp": "./dist/index.js"
+    "nzovu-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -28,7 +28,7 @@
     "prepublishOnly": "node ../../scripts/block-release.mjs"
   },
   "keywords": [
-    "chronoqueue",
+    "nzovu",
     "mcp",
     "model-context-protocol",
     "ai",
@@ -37,10 +37,10 @@
     "claude",
     "anthropic"
   ],
-  "author": "ChronoQueue Team",
+  "author": "Nzovu Team",
   "license": "MIT",
   "dependencies": {
-    "@chronoqueue/client": "workspace:*",
+    "@nzovu/client": "workspace:*",
     "@grpc/grpc-js": "^1.14.1",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "zod": "^3.23.8"
@@ -59,13 +59,13 @@
     "node": ">=18.0.0"
   },
   "bugs": {
-    "url": "https://github.com/adrien19/chronoqueue-typescript-sdk/issues"
+    "url": "https://github.com/adrien19/nzovu-sdk-typescript/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adrien19/chronoqueue-typescript-sdk.git",
+    "url": "git+https://github.com/adrien19/nzovu-sdk-typescript.git",
     "directory": "packages/mcp"
   },
-  "homepage": "https://github.com/adrien19/chronoqueue-typescript-sdk/tree/main/packages/mcp",
+  "homepage": "https://github.com/adrien19/nzovu-sdk-typescript/tree/main/packages/mcp",
   "private": true
 }

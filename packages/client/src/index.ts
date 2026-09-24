@@ -1,8 +1,8 @@
 /**
- * ChronoQueue Client - Main entry point
+ * Nzovu Client - Main entry point
  */
 
-export { ChronoQueueClient } from "./client";
+export { NzovuClient } from "./client";
 export { Connection, ConnectionState } from "./connection";
 export { DLQClient, type DLQStats } from "./dlq";
 export { MessageClient } from "./message";
@@ -11,7 +11,7 @@ export { QueueClient } from "./queue";
 export { ScheduleClient } from "./schedule";
 export { SchemaClient } from "./schema";
 export {
-  ChronoQueueError,
+  NzovuError,
   ClientConfig,
   ConnectionOptions,
   ErrorCode,
@@ -46,8 +46,8 @@ export {
   QueueServiceTypes,
   Schedule,
   Schema,
-} from "@chronoqueue/proto";
-export type { Duration, LeasePolicy } from "@chronoqueue/proto";
+} from "@nzovu/proto";
+export type { Duration, LeasePolicy } from "@nzovu/proto";
 
 // Re-export Queue-specific types for easier access
 // MessageRetentionPolicy and MessageRetentionPolicy_Mode are available via Queue namespace
@@ -57,12 +57,12 @@ export type { Duration, LeasePolicy } from "@chronoqueue/proto";
 export {
   PostMessagesBulkResponse_MessagePostResult_ErrorCode as BulkMessageErrorCode,
   PostMessagesBulkRequest_TransactionMode as TransactionMode,
-} from "@chronoqueue/proto/lib/generated/proto/queueservice/v1/request_response";
+} from "@nzovu/proto/lib/generated/proto/queueservice/v1/request_response";
 export type {
   PostMessagesBulkResponse_MessagePostResult as MessagePostResult,
   PostMessagesBulkRequest,
   PostMessagesBulkResponse,
-} from "@chronoqueue/proto/lib/generated/proto/queueservice/v1/request_response";
+} from "@nzovu/proto/lib/generated/proto/queueservice/v1/request_response";
 
 // Re-export error utilities
 export {

@@ -1,323 +1,69 @@
-# @chronoqueue/proto
+# @nzovu/proto
 
-[![npm version](https://badge.fury.io/js/@chronoqueue%2Fproto.svg)](https://www.npmjs.com/package/@chronoqueue/proto)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+Generated TypeScript codecs and gRPC definitions for
+`nzovu.api.queueservice.v1.QueueService`. This workspace package is private;
+packaging and publication are disabled.
 
-Protocol Buffer definitions and generated TypeScript types for ChronoQueue.
+## Build and verify
 
-## 📦 Installation
+Run from the repository root after the frozen dependency install:
 
-```bash
-npm install @chronoqueue/proto
-# or
-pnpm add @chronoqueue/proto
-# or
-yarn add @chronoqueue/proto
-```
-
-## 🚀 Usage
-
-### Importing Types
-
-```typescript
-import {
-  Queue,
-  Queue_QueueType,
-  Queue_FairnessPolicy,
-  Message,
-  Payload,
-  Schedule,
-  Schema,
-  QueueServiceService,
-} from "@chronoqueue/proto";
-```
-
-### Creating a Queue
-
-```typescript
-import {
-  Queue,
-  Queue_QueueType,
-  Queue_FairnessPolicy,
-} from "@chronoqueue/proto";
-
-const queue = Queue.create({
-  id: "task-queue-001",
-  name: "Task Processing Queue",
-  description: "Handles background task processing",
-  queueType: Queue_QueueType.STANDARD,
-  fairnessPolicy: Queue_FairnessPolicy.FIFO,
-  maxSize: 10000,
-  metadata: {
-    createdAt: { seconds: BigInt(Date.now() / 1000), nanos: 0 },
-    updatedAt: { seconds: BigInt(Date.now() / 1000), nanos: 0 },
-  },
-});
-```
-
-### Creating a Message
-
-```typescript
-import { Message, Payload } from "@chronoqueue/proto";
-
-const message = Message.create({
-  id: "msg-123",
-  queueId: "task-queue-001",
-  payload: Payload.create({
-    data: Buffer.from(
-      JSON.stringify({
-        task: "process-image",
-        imageId: "12345",
-      }),
-    ),
-    contentType: "application/json",
-    metadata: {
-      source: "api",
-      priority: "high",
-    },
-  }),
-  metadata: {
-    state: Message_Metadata_State.PENDING,
-    createdAt: { seconds: BigInt(Date.now() / 1000), nanos: 0 },
-  },
-});
-```
-
-### Creating a Schedule
-
-```typescript
-import { Schedule } from "@chronoqueue/proto";
-
-const schedule = Schedule.create({
-  id: "schedule-001",
-  queueId: "task-queue-001",
-  cronExpression: "0 0 * * *", // Daily at midnight
-  payload: Payload.create({
-    data: Buffer.from(JSON.stringify({ task: "daily-report" })),
-    contentType: "application/json",
-  }),
-  metadata: {
-    state: Schedule_Metadata_State.ACTIVE,
-  },
-});
-```
-
-### Encoding and Decoding
-
-```typescript
-import { Message } from "@chronoqueue/proto";
-
-// Encode to binary
-const message = Message.create({
-  /* ... */
-});
-const encoded = Message.encode(message).finish();
-
-// Decode from binary
-const decoded = Message.decode(encoded);
-```
-
-### Using with gRPC
-
-```typescript
-import { QueueServiceService } from "@chronoqueue/proto";
-import * as grpc from "@grpc/grpc-js";
-
-// Create gRPC client
-const client = new grpc.Client(
-  "localhost:50051",
-  grpc.credentials.createInsecure(),
-  {
-    "grpc.service_config": JSON.stringify({
-      methodConfig: [
-        {
-          name: [{ service: QueueServiceService.typeName }],
-          retryPolicy: {
-            maxAttempts: 5,
-            initialBackoff: "0.5s",
-            maxBackoff: "30s",
-            backoffMultiplier: 2,
-            retryableStatusCodes: ["UNAVAILABLE"],
-          },
-        },
-      ],
-    }),
-  },
-);
-
-// Service definition is available for implementing clients
-console.log("Service name:", QueueServiceService.typeName);
-console.log("Methods:", QueueServiceService.methods);
-```
-
-## 📚 API Reference
-
-### Core Types
-
-#### Queue
-
-Represents a task queue with configuration and metadata.
-
-**Fields:**
-
-- `id` (string) - Unique queue identifier
-- `name` (string) - Human-readable queue name
-- `description` (string, optional) - Queue description
-- `queueType` (Queue_QueueType) - Queue type (STANDARD, PRIORITY, etc.)
-- `fairnessPolicy` (Queue_FairnessPolicy) - Fairness policy (FIFO, LIFO, PRIORITY)
-- `maxSize` (number, optional) - Maximum queue size
-- `metadata` (QueueMetadata, optional) - Queue metadata
-
-#### Message
-
-Represents a message in a queue.
-
-**Fields:**
-
-- `id` (string) - Unique message identifier
-- `queueId` (string) - Queue containing this message
-- `payload` (Payload) - Message payload
-- `metadata` (Message_Metadata, optional) - Message metadata
-- `scheduleId` (string, optional) - Associated schedule ID
-
-#### Payload
-
-Contains the actual data for a message.
-
-**Fields:**
-
-- `data` (Uint8Array) - Binary data
-- `contentType` (string, optional) - MIME type
-- `metadata` (object, optional) - Key-value metadata
-
-#### Schedule
-
-Represents a scheduled task.
-
-**Fields:**
-
-- `id` (string) - Unique schedule identifier
-- `queueId` (string) - Target queue
-- `cronExpression` (string) - Cron expression for scheduling
-- `payload` (Payload) - Payload to send
-- `metadata` (Schedule_Metadata, optional) - Schedule metadata
-
-#### Schema
-
-Represents a schema for validation.
-
-**Fields:**
-
-- `id` (string) - Unique schema identifier
-- `queueId` (string) - Associated queue
-- `schemaType` (string) - Schema type (e.g., "json-schema")
-- `schema` (string) - Schema definition
-
-### Enums
-
-#### Queue_QueueType
-
-- `UNSPECIFIED` (0)
-- `STANDARD` (1)
-- `PRIORITY` (2)
-- `FIFO` (3)
-
-#### Queue_FairnessPolicy
-
-- `UNSPECIFIED` (0)
-- `FIFO` (1)
-- `LIFO` (2)
-- `PRIORITY` (3)
-- `FAIR_SHARE` (4)
-
-#### Message_Metadata_State
-
-- `UNSPECIFIED` (0)
-- `PENDING` (1)
-- `PROCESSING` (2)
-- `COMPLETED` (3)
-- `FAILED` (4)
-- `CANCELLED` (5)
-
-#### Schedule_Metadata_State
-
-- `UNSPECIFIED` (0)
-- `ACTIVE` (1)
-- `PAUSED` (2)
-- `COMPLETED` (3)
-- `CANCELLED` (4)
-
-### Service Definitions
-
-#### QueueServiceService
-
-gRPC service definition for queue operations.
-
-**Available via:**
-
-```typescript
-import { QueueServiceService } from "@chronoqueue/proto";
-```
-
-## 🧪 Testing
-
-This package includes comprehensive tests covering all generated types and functionality.
-
-Run tests:
-
-```bash
-cd packages/proto
-pnpm test
-
-# Watch mode
-pnpm test:watch
-
-# With coverage
-pnpm test:coverage
-```
-
-## 🔧 Development
-
-### Regenerating Types
-
-If you need to regenerate TypeScript types from proto files:
-
-```bash
-# From package directory
-pnpm run gen
-
-# Or from workspace root
+```sh
 make gen-proto
-```
-
-### Building
-
-```bash
-# From package directory
-pnpm run build
-
-# Or from workspace root
 make build-proto
+make test-proto
+make check-generated
 ```
 
-## 📖 Related Packages
+Sources are pinned by commit and SHA-256 checksums in `proto/SOURCE.json`.
+`make check-proto` rejects missing, added or modified sources. To update them,
+use `make update-proto SOURCE=/path/to/server COMMIT=<full-commit-sha>`.
+Generation uses protoc 33.1.0 and ts-proto 2.8.3 from the lockfile; no downloads
+or dependency installation occur during generation.
 
-- [@chronoqueue/client](../client) - High-level client SDK (coming soon)
+Canonical descriptor paths begin with `proto/`, matching the server imports.
+Outputs live in `src/generated/proto/`; Google well-known types are under
+`src/generated/google/protobuf/`. Generated files are local build outputs.
+Never edit them manually.
 
-## 🤝 Contributing
+## Namespaces and codecs
 
-Contributions are welcome! Please see the [main repository](../../README.md) for contribution guidelines.
+```typescript
+import {
+  Common,
+  Message,
+  Queue,
+  QueueService,
+  QueueServiceTypes,
+} from "@nzovu/proto";
 
-## 📄 License
+const queue = Queue.Queue.fromPartial({ name: "tasks" });
+const message = Message.Message.fromPartial({
+  messageId: "task-1",
+  metadata: {
+    payload: Common.Payload.fromPartial({
+      data: { task: "resize" },
+      contentType: "application/json",
+    }),
+    priority: "0",
+    headers: [{ key: "x-request", value: new Uint8Array([1, 2, 3]) }],
+  },
+});
+const bytes = Message.Message.encode(message).finish();
+const decoded = Message.Message.decode(bytes);
+const request = QueueServiceTypes.PostMessageRequest.fromPartial({
+  queueName: queue.name,
+  message: decoded,
+});
+```
 
-MIT License - see [LICENSE](../../LICENSE) for details.
+`QueueService.QueueServiceClient` is the raw gRPC client. The separate
+`@nzovu/client` workspace provides Promise-based resource methods.
 
-## 🔗 Links
+Int64 values use strings; bytes use `Uint8Array` (Node `Buffer` is accepted as
+input). Optional scalar presence is retained, including explicit zero renewal
+limits. Durations contain seconds/nanos. Timestamp fields currently use `Date`,
+which has millisecond precision; do not assume nanosecond preservation for dates.
 
-- **npm**: [@chronoqueue/proto](https://www.npmjs.com/package/@chronoqueue/proto)
-- **Repository**: [chronoqueue-typescript-sdk](https://github.com/adrien19/chronoqueue-typescript-sdk)
-- **Issues**: [Report bugs](https://github.com/adrien19/chronoqueue-typescript-sdk/issues)
-
----
-
-Part of the [ChronoQueue TypeScript SDK](../../README.md)
+Both CommonJS `require('@nzovu/proto')` and ESM imports from the built package are
+supported. Type declarations are emitted alongside CommonJS output in `lib/`.

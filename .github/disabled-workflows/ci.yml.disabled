@@ -139,7 +139,7 @@ jobs:
         run: make gen-proto
 
       - name: Build proto package
-        run: pnpm --filter @chronoqueue/proto... build
+        run: pnpm --filter @nzovu/proto... build
 
       - name: Run tests with coverage
         run: make test-coverage

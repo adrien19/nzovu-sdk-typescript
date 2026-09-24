@@ -1,4 +1,4 @@
-import { ChronoQueueClient, Message } from "@chronoqueue/client";
+import { NzovuClient, Message } from "@nzovu/client";
 
 async function processEmail(message: any) {
   // Simulate sending an email
@@ -18,7 +18,7 @@ async function processEmail(message: any) {
 }
 
 async function main() {
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
   });
   await client.connect();

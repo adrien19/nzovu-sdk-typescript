@@ -1,4 +1,4 @@
-import { QueueServiceTypes } from "@chronoqueue/proto";
+import { QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../src/connection";
 import { SchemaClient } from "../src/schema";
 
@@ -135,7 +135,7 @@ describe("SchemaClient", () => {
 
       expect(result).toEqual(mockSchemas);
       expect(mockQueueServiceClient.listSchemas).toHaveBeenCalledWith(
-        { prefix: "", limit: 100, activeOnly: false },
+        { prefix: "", pageSize: 100, pageToken: "", activeOnly: false },
         expect.any(Function),
       );
     });
@@ -149,7 +149,7 @@ describe("SchemaClient", () => {
       await schemaClient.listSchemas({ prefix: "user-" });
 
       expect(mockQueueServiceClient.listSchemas).toHaveBeenCalledWith(
-        { prefix: "user-", limit: 100, activeOnly: false },
+        { prefix: "user-", pageSize: 100, pageToken: "", activeOnly: false },
         expect.any(Function),
       );
     });

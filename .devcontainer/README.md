@@ -17,8 +17,7 @@ make format FORMAT_FLAGS=--check
 ```
 
 Build output is local JavaScript/declarations for testing; npm packaging and
-publication are disabled. The existing root typecheck covers only proto;
-`make build-all` also compiles client and MCP. Examples require separate validation.
+publication are disabled. Root typechecking covers proto, client and MCP. Examples require separate validation.
 
 Optional PostgreSQL fixture, run explicitly on the host for later live tests:
 

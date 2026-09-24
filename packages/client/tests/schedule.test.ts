@@ -49,7 +49,7 @@ describe("ScheduleClient", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     mockClient = createMockClient();
 
@@ -370,7 +370,8 @@ describe("ScheduleClient", () => {
       expect(mockClient.getScheduleHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           scheduleId: "test-schedule-1",
-          limit: "100",
+          pageSize: 100,
+          pageToken: "",
         }),
         expect.any(Function),
       );
@@ -387,7 +388,8 @@ describe("ScheduleClient", () => {
       expect(mockClient.getScheduleHistory).toHaveBeenCalledWith(
         expect.objectContaining({
           scheduleId: "test-schedule-1",
-          limit: "50",
+          pageSize: 50,
+          pageToken: "",
         }),
         expect.any(Function),
       );

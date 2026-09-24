@@ -1,7 +1,7 @@
 {
   "name": "trip-planner-worker",
-  "version": "1.0.0",
-  "description": "ChronoQueue-powered trip planning orchestration system",
+  "version": "0.0.1-dev.0",
+  "description": "Nzovu-powered trip planning orchestration system",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -12,16 +12,16 @@
     "prepublishOnly": "node ../../../scripts/block-release.mjs"
   },
   "keywords": [
-    "chronoqueue",
+    "nzovu",
     "trip-planner",
     "orchestration",
     "worker",
     "task-queue"
   ],
-  "author": "ChronoQueue Example",
+  "author": "Nzovu Example",
   "license": "MIT",
   "dependencies": {
-    "@chronoqueue/client": "workspace:*",
+    "@nzovu/client": "workspace:*",
     "typescript": "^5.0.0",
     "@types/node": "^20.0.0"
   },

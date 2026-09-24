@@ -1,8 +1,8 @@
 import * as grpc from "@grpc/grpc-js";
-import { ChronoQueueError, ErrorCode } from "../types";
+import { NzovuError, ErrorCode } from "../types";
 
 /**
- * Convert gRPC status code to ChronoQueue error code
+ * Convert gRPC status code to Nzovu error code
  */
 export function grpcStatusToErrorCode(status: grpc.status): ErrorCode {
   switch (status) {
@@ -30,10 +30,10 @@ export function grpcStatusToErrorCode(status: grpc.status): ErrorCode {
 }
 
 /**
- * Create ChronoQueueError from gRPC error
+ * Create NzovuError from gRPC error
  */
-export function handleGrpcError(error: Error): ChronoQueueError {
-  if (error instanceof ChronoQueueError) {
+export function handleGrpcError(error: Error): NzovuError {
+  if (error instanceof NzovuError) {
     return error;
   }
 
@@ -41,14 +41,10 @@ export function handleGrpcError(error: Error): ChronoQueueError {
 
   if (grpcError.code !== undefined) {
     const code = grpcStatusToErrorCode(grpcError.code);
-    return new ChronoQueueError(
-      code,
-      grpcError.details || grpcError.message,
-      error,
-    );
+    return new NzovuError(code, grpcError.details || grpcError.message, error);
   }
 
-  return new ChronoQueueError(ErrorCode.INTERNAL, error.message, error);
+  return new NzovuError(ErrorCode.INTERNAL, error.message, error);
 }
 
 /**
@@ -56,7 +52,7 @@ export function handleGrpcError(error: Error): ChronoQueueError {
  */
 export function validateRequired(value: any, fieldName: string): void {
   if (value === undefined || value === null || value === "") {
-    throw new ChronoQueueError(
+    throw new NzovuError(
       ErrorCode.INVALID_ARGUMENT,
       `${fieldName} is required`,
     );
@@ -71,7 +67,7 @@ export function validatePositive(
   fieldName: string,
 ): void {
   if (value !== undefined && value <= 0) {
-    throw new ChronoQueueError(
+    throw new NzovuError(
       ErrorCode.INVALID_ARGUMENT,
       `${fieldName} must be positive`,
     );
@@ -86,7 +82,7 @@ export function validateNonNegative(
   fieldName: string,
 ): void {
   if (value !== undefined && value < 0) {
-    throw new ChronoQueueError(
+    throw new NzovuError(
       ErrorCode.INVALID_ARGUMENT,
       `${fieldName} must be non-negative`,
     );
@@ -103,7 +99,7 @@ export function validateRange(
   fieldName: string,
 ): void {
   if (value !== undefined && (value < min || value > max)) {
-    throw new ChronoQueueError(
+    throw new NzovuError(
       ErrorCode.INVALID_ARGUMENT,
       `${fieldName} must be between ${min} and ${max}`,
     );

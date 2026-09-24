@@ -1,46 +1,44 @@
 {
-  "name": "chronoqueue-typescript-sdk",
+  "name": "nzovu-sdk-typescript",
   "type": "module",
   "private": true,
   "keywords": [
-    "chronoqueue"
+    "nzovu"
   ],
-  "homepage": "https://github.com/adrien19/chronoqueue-typescript-sdk#readme",
+  "homepage": "https://github.com/adrien19/nzovu-sdk-typescript#readme",
   "bugs": {
-    "url": "https://github.com/adrien19/chronoqueue-typescript-sdk/issues"
+    "url": "https://github.com/adrien19/nzovu-sdk-typescript/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adrien19/chronoqueue-typescript-sdk.git"
+    "url": "git+https://github.com/adrien19/nzovu-sdk-typescript.git"
   },
   "license": "MIT",
-  "author": "ChronoQueue Team",
+  "author": "Nzovu Team",
   "directories": {
     "doc": "docs"
   },
   "files": [],
   "scripts": {
     "rebuild": "pnpm run clean && pnpm run build",
-    "build": "lerna run --stream build",
-    "build.watch": "pnpm run build:protos && tsc --build --watch packages/*/tsconfig.json",
-    "build:protos": "node ./packages/proto/scripts/compile-proto.ts",
-    "test": "lerna run --stream test",
-    "test.watch": "lerna run --stream test.watch",
-    "ci-stress": "node ./packages/test/lib/load/run-all-stress-ci-scenarios.js",
-    "ci-nightly": "node ./packages/test/lib/load/run-all-nightly-scenarios.js",
-    "wait-namespace": "node ./scripts/wait-on-temporal.mjs",
+    "build": "make build-all",
+    "build:protos": "node scripts/proto.mjs generate",
+    "test": "make test-all",
     "lint": "eslint 'packages/*/src/**/*.ts' --no-error-on-unmatched-pattern --fix && prettier --write .",
     "lint.check": "eslint 'packages/*/src/**/*.ts' --no-error-on-unmatched-pattern && prettier --end-of-line auto --check .",
     "lint.prune": "ts-prune --error -p tsconfig.prune.json --ignore \"used in module\" --skip \".d.ts\"",
     "format": "pnpm prettier --write .",
-    "clean": "node ./scripts/clean.mjs",
-    "docs": "cd packages/docs && pnpm run maybe-install-deps-and-build-docs",
+    "clean": "make clean",
     "prepack": "node scripts/block-release.mjs",
-    "prepublishOnly": "node scripts/block-release.mjs"
+    "prepublishOnly": "node scripts/block-release.mjs",
+    "test:tooling": "node --test scripts/*.test.mjs",
+    "check:proto": "node scripts/proto.mjs check",
+    "check:identity": "node scripts/check-identity.mjs",
+    "check:imports": "node scripts/check-imports.mjs"
   },
   "dependencies": {
-    "@chronoqueue/client": "workspace:*",
-    "@chronoqueue/proto": "workspace:*"
+    "@nzovu/client": "workspace:*",
+    "@nzovu/proto": "workspace:*"
   },
   "devDependencies": {
     "@eslint/js": "^9.15.0",
@@ -71,5 +69,6 @@
     "node": ">= 18.0.0",
     "pnpm": ">= 10.16.0"
   },
-  "packageManager": "pnpm@10.16.0"
+  "packageManager": "pnpm@10.16.0",
+  "version": "0.0.1-dev.0"
 }

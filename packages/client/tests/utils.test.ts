@@ -1,5 +1,5 @@
 import * as grpc from "@grpc/grpc-js";
-import { ChronoQueueError, ErrorCode } from "../src/types";
+import { NzovuError, ErrorCode } from "../src/types";
 import {
   durationToMs,
   msToDuration,
@@ -185,8 +185,8 @@ describe("Error Utils", () => {
   });
 
   describe("handleGrpcError", () => {
-    it("should return ChronoQueueError as-is", () => {
-      const original = new ChronoQueueError(ErrorCode.NOT_FOUND, "Not found");
+    it("should return NzovuError as-is", () => {
+      const original = new NzovuError(ErrorCode.NOT_FOUND, "Not found");
       const result = handleGrpcError(original);
       expect(result).toBe(original);
     });
@@ -197,7 +197,7 @@ describe("Error Utils", () => {
         details: "Resource not found",
       });
       const result = handleGrpcError(grpcError);
-      expect(result).toBeInstanceOf(ChronoQueueError);
+      expect(result).toBeInstanceOf(NzovuError);
       expect(result.code).toBe(ErrorCode.NOT_FOUND);
       expect(result.message).toBe("Resource not found");
     });
@@ -315,34 +315,31 @@ describe("Error Utils", () => {
 
 describe("Retry Utils", () => {
   describe("isRetryableError", () => {
-    it("should return true for ChronoQueueError with UNAVAILABLE", () => {
-      const error = new ChronoQueueError(ErrorCode.UNAVAILABLE, "Unavailable");
+    it("should return true for NzovuError with UNAVAILABLE", () => {
+      const error = new NzovuError(ErrorCode.UNAVAILABLE, "Unavailable");
       expect(isRetryableError(error)).toBe(true);
     });
 
-    it("should return true for ChronoQueueError with DEADLINE_EXCEEDED", () => {
-      const error = new ChronoQueueError(
-        ErrorCode.DEADLINE_EXCEEDED,
-        "Timeout",
-      );
+    it("should return true for NzovuError with DEADLINE_EXCEEDED", () => {
+      const error = new NzovuError(ErrorCode.DEADLINE_EXCEEDED, "Timeout");
       expect(isRetryableError(error)).toBe(true);
     });
 
-    it("should return true for ChronoQueueError with INTERNAL", () => {
-      const error = new ChronoQueueError(ErrorCode.INTERNAL, "Internal error");
+    it("should return true for NzovuError with INTERNAL", () => {
+      const error = new NzovuError(ErrorCode.INTERNAL, "Internal error");
       expect(isRetryableError(error)).toBe(true);
     });
 
-    it("should return true for ChronoQueueError with RESOURCE_EXHAUSTED", () => {
-      const error = new ChronoQueueError(
+    it("should return true for NzovuError with RESOURCE_EXHAUSTED", () => {
+      const error = new NzovuError(
         ErrorCode.RESOURCE_EXHAUSTED,
         "Rate limited",
       );
       expect(isRetryableError(error)).toBe(true);
     });
 
-    it("should return false for ChronoQueueError with NOT_FOUND", () => {
-      const error = new ChronoQueueError(ErrorCode.NOT_FOUND, "Not found");
+    it("should return false for NzovuError with NOT_FOUND", () => {
+      const error = new NzovuError(ErrorCode.NOT_FOUND, "Not found");
       expect(isRetryableError(error)).toBe(false);
     });
 
@@ -455,7 +452,7 @@ describe("Retry Utils", () => {
       const operation = jest
         .fn()
         .mockRejectedValueOnce(
-          new ChronoQueueError(ErrorCode.UNAVAILABLE, "Retry me"),
+          new NzovuError(ErrorCode.UNAVAILABLE, "Retry me"),
         )
         .mockResolvedValue("success");
 
@@ -467,9 +464,7 @@ describe("Retry Utils", () => {
     it("should throw immediately on non-retryable error", async () => {
       const operation = jest
         .fn()
-        .mockRejectedValue(
-          new ChronoQueueError(ErrorCode.NOT_FOUND, "Not found"),
-        );
+        .mockRejectedValue(new NzovuError(ErrorCode.NOT_FOUND, "Not found"));
 
       await expect(retryOperation(operation, config)).rejects.toThrow(
         "Not found",
@@ -481,7 +476,7 @@ describe("Retry Utils", () => {
       const operation = jest
         .fn()
         .mockRejectedValue(
-          new ChronoQueueError(ErrorCode.UNAVAILABLE, "Always fail"),
+          new NzovuError(ErrorCode.UNAVAILABLE, "Always fail"),
         );
 
       await expect(retryOperation(operation, config)).rejects.toThrow(

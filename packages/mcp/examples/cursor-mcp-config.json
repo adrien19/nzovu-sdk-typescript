@@ -1,12 +1,12 @@
 {
   "mcpServers": {
-    "chronoqueue": {
+    "nzovu": {
       "command": "node",
       "args": ["./dist/index.js"],
       "cwd": "${workspaceFolder}/packages/mcp",
       "env": {
-        "CHRONOQUEUE_ADDRESS": "host.docker.internal:9000",
-        "CHRONOQUEUE_INSECURE": "true"
+        "NZOVU_ADDRESS": "host.docker.internal:9000",
+        "NZOVU_INSECURE": "true"
       }
     }
   }

@@ -1,6 +1,6 @@
 import * as grpc from "@grpc/grpc-js";
 import { setTimeout as setTimeoutPromise } from "timers/promises";
-import { ChronoQueueError, ErrorCode } from "../types";
+import { NzovuError, ErrorCode } from "../types";
 
 /**
  * Retry configuration
@@ -17,11 +17,11 @@ export interface RetryConfig {
 }
 
 /**
- * Check if error is retryable based on ChronoQueueError or gRPC error
+ * Check if error is retryable based on NzovuError or gRPC error
  */
 export function isRetryableError(error: Error): boolean {
-  // Check ChronoQueueError codes
-  if (error instanceof ChronoQueueError) {
+  // Check NzovuError codes
+  if (error instanceof NzovuError) {
     return (
       error.code === ErrorCode.UNAVAILABLE ||
       error.code === ErrorCode.DEADLINE_EXCEEDED ||

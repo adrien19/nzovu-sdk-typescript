@@ -1,16 +1,16 @@
-import { ChronoQueueClient } from "../src/client";
+import { NzovuClient } from "../src/client";
 import { Connection } from "../src/connection";
 import { MessageClient } from "../src/message";
 import { QueueClient } from "../src/queue";
 import { ScheduleClient } from "../src/schedule";
 
-describe("ChronoQueueClient", () => {
-  let client: ChronoQueueClient;
+describe("NzovuClient", () => {
+  let client: NzovuClient;
 
   beforeEach(() => {
-    client = new ChronoQueueClient({
+    client = new NzovuClient({
       connection: {
-        address: "localhost:50051",
+        address: "localhost:9000",
       },
     });
   });
@@ -23,7 +23,7 @@ describe("ChronoQueueClient", () => {
 
   describe("constructor", () => {
     it("should create a new client instance", () => {
-      expect(client).toBeInstanceOf(ChronoQueueClient);
+      expect(client).toBeInstanceOf(NzovuClient);
     });
 
     it("should initialize sub-clients", () => {
@@ -37,9 +37,9 @@ describe("ChronoQueueClient", () => {
     });
 
     it("should accept optional workerId in config", () => {
-      const clientWithWorkerId = new ChronoQueueClient({
+      const clientWithWorkerId = new NzovuClient({
         connection: {
-          address: "localhost:50051",
+          address: "localhost:9000",
         },
         workerId: "worker-123",
       });
@@ -47,9 +47,9 @@ describe("ChronoQueueClient", () => {
     });
 
     it("should pass workerId to MessageClient", () => {
-      const clientWithWorkerId = new ChronoQueueClient({
+      const clientWithWorkerId = new NzovuClient({
         connection: {
-          address: "localhost:50051",
+          address: "localhost:9000",
         },
         workerId: "worker-456",
       });
@@ -83,7 +83,7 @@ describe("Connection", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
   });
 
@@ -104,7 +104,7 @@ describe("Connection", () => {
 
     it("should accept custom timeout", () => {
       const customConnection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         timeout: 5000,
       });
       expect(customConnection).toBeInstanceOf(Connection);
@@ -124,7 +124,7 @@ describe("QueueClient", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     queueClient = new QueueClient(connection);
   });
@@ -158,7 +158,7 @@ describe("MessageClient", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     messageClient = new MessageClient(connection);
   });
@@ -251,7 +251,7 @@ describe("ScheduleClient", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     scheduleClient = new ScheduleClient(connection);
   });

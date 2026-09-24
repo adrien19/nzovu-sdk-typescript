@@ -1,20 +1,19 @@
 /**
  * Trip Planner Producer
- * Posts trip planning requests to ChronoQueue
+ * Posts trip planning requests to Nzovu
  */
 
-import { ChronoQueueClient, Message, Queue } from "@chronoqueue/client";
+import { NzovuClient, Message, Queue } from "@nzovu/client";
 import { PlanTripPayload, TaskType, TripRequest } from "./types";
 
 const QUEUE_NAME = "trip-planning-requests";
-const SERVER_ADDRESS =
-  process.env.CHRONOQUEUE_SERVER || "host.docker.internal:9000";
+const SERVER_ADDRESS = process.env.NZOVU_SERVER || "host.docker.internal:9000";
 
 async function main() {
   console.log("🚀 Starting Trip Planner Producer...");
-  console.log(`📡 Connecting to ChronoQueue at ${SERVER_ADDRESS}\n`);
+  console.log(`📡 Connecting to Nzovu at ${SERVER_ADDRESS}\n`);
 
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: SERVER_ADDRESS },
   });
 

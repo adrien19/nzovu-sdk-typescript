@@ -1,11 +1,12 @@
+import { VERSION } from './version.js';
 /**
- * MCP Server Implementation for ChronoQueue
+ * MCP Server Implementation for Nzovu
  *
  * Sets up the Model Context Protocol server using the modern McpServer API
- * with registerTool for each ChronoQueue operation.
+ * with registerTool for each Nzovu operation.
  */
 
-import { ChronoQueueClient } from '@chronoqueue/client';
+import { NzovuClient } from '@nzovu/client';
 import * as grpc from '@grpc/grpc-js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { readFileSync } from 'fs';
@@ -48,7 +49,7 @@ import {
 const TOOL_DEFINITIONS: Record<string, { description: string; schema: z.ZodSchema }> = {
   // Queue Management
   create_queue: {
-    description: 'Create a new ChronoQueue queue with specified configuration',
+    description: 'Create a new Nzovu queue with specified configuration',
     schema: createQueueSchema,
   },
   delete_queue: {
@@ -175,8 +176,8 @@ const TOOL_DEFINITIONS: Record<string, { description: string; schema: z.ZodSchem
 export async function createMCPServer(): Promise<McpServer> {
   const server = new McpServer(
     {
-      name: 'chronoqueue-mcp',
-      version: '0.1.0',
+      name: 'nzovu-mcp',
+      version: VERSION,
     },
     {
       capabilities: {
@@ -201,10 +202,10 @@ export async function createMCPServer(): Promise<McpServer> {
     credentials = grpc.credentials.createSsl();
   }
 
-  // Initialize ChronoQueue SDK client
-  const chronoQueueClient = new ChronoQueueClient({
+  // Initialize Nzovu SDK client
+  const nzovuClient = new NzovuClient({
     connection: {
-      address: config.chronoqueueAddress,
+      address: config.nzovuAddress,
       credentials,
       timeout: parseDuration(config.timeout),
     },
@@ -212,7 +213,7 @@ export async function createMCPServer(): Promise<McpServer> {
   });
 
   // Connect to server
-  await chronoQueueClient.connect();
+  await nzovuClient.connect();
 
   // Register all tools using the modern registerTool API
   for (const [toolName, toolDef] of Object.entries(TOOL_DEFINITIONS)) {
@@ -224,7 +225,7 @@ export async function createMCPServer(): Promise<McpServer> {
       },
       async (args) => {
         try {
-          const result = await handleToolCall(toolName, args, chronoQueueClient);
+          const result = await handleToolCall(toolName, args, nzovuClient);
           return {
             content: [
               {
@@ -254,13 +255,13 @@ export async function createMCPServer(): Promise<McpServer> {
   // Handle graceful shutdown
   process.on('SIGINT', async () => {
     console.error('Received SIGINT, shutting down gracefully...');
-    await chronoQueueClient.disconnect();
+    await nzovuClient.disconnect();
     process.exit(0);
   });
 
   process.on('SIGTERM', async () => {
     console.error('Received SIGTERM, shutting down gracefully...');
-    await chronoQueueClient.disconnect();
+    await nzovuClient.disconnect();
     process.exit(0);
   });
 

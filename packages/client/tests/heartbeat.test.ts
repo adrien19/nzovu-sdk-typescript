@@ -81,7 +81,7 @@ describe("MessageClient Heartbeat Failure Handling", () => {
     Math.random = () => 0.5;
 
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     mockClient = createMockClient();
     mockLogger = createMockLogger();
