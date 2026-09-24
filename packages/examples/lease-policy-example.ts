@@ -5,15 +5,10 @@
  * LeasePolicy provides fine-grained control over message lease management and heartbeat behavior.
  */
 
-import {
-  ChronoQueueClient,
-  LeasePolicy,
-  Message,
-  Queue,
-} from "@chronoqueue/client";
+import { NzovuClient, LeasePolicy, Message, Queue } from "@nzovu/client";
 
 async function main() {
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
   });
   await client.connect();

@@ -1,4 +1,4 @@
-import { Schema as ProtoSchema, QueueServiceTypes } from "@chronoqueue/proto";
+import { Schema as ProtoSchema, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
 
@@ -101,7 +101,8 @@ export class SchemaClient {
       return new Promise<QueueServiceTypes.SchemaInfo[]>((resolve, reject) => {
         const request: QueueServiceTypes.ListSchemasRequest = {
           prefix: options?.prefix || "",
-          limit: options?.limit || 100,
+          pageSize: options?.limit ?? 100,
+          pageToken: "",
           activeOnly:
             options?.activeOnly !== undefined ? options.activeOnly : false,
         };

@@ -1,5 +1,5 @@
 /**
- * Tests for @chronoqueue/proto package
+ * Tests for @nzovu/proto package
  *
  * These tests verify that proto definitions are correctly generated
  * and can be used for message creation and serialization.
@@ -7,7 +7,7 @@
 
 import * as Proto from "../src/index";
 
-describe("@chronoqueue/proto", () => {
+describe("@nzovu/proto", () => {
   describe("Package Exports", () => {
     it("should export all proto namespaces", () => {
       expect(Proto.Common).toBeDefined();
@@ -132,6 +132,7 @@ describe("@chronoqueue/proto", () => {
             schemaId: "",
             schemaVersion: 0,
           },
+          headers: [],
           state: Proto.Message.Message_Metadata_State.PENDING,
           attemptsLeft: 3,
           leaseExpiry: "0",
@@ -163,6 +164,7 @@ describe("@chronoqueue/proto", () => {
             schemaId: "",
             schemaVersion: 0,
           },
+          headers: [],
           state: Proto.Message.Message_Metadata_State.PENDING,
           attemptsLeft: 3,
           leaseExpiry: "0",
@@ -189,11 +191,11 @@ describe("@chronoqueue/proto", () => {
             schemaId: "",
             schemaVersion: 0,
           },
+          headers: [],
           state: Proto.Schedule.Schedule_Metadata_State.SCHEDULED,
           cronSchedule: "0 0 * * *",
           queueName: "task-queue",
           messageIds: [],
-          exclusivityKey: "",
           stateMessage: "",
           priority: "50",
           hasMaxMessages: false,
@@ -305,6 +307,7 @@ describe("@chronoqueue/proto", () => {
               schemaId: "",
               schemaVersion: 0,
             },
+            headers: [],
             state: Proto.Message.Message_Metadata_State.PENDING,
             attemptsLeft: 3,
             leaseExpiry: "0",
@@ -333,7 +336,7 @@ describe("@chronoqueue/proto", () => {
 
     it("should have correct gRPC paths", () => {
       expect(Proto.QueueService.QueueServiceService.createQueue.path).toBe(
-        "/chronoqueue.api.queueservice.v1.QueueService/CreateQueue",
+        "/nzovu.api.queueservice.v1.QueueService/CreateQueue",
       );
     });
   });
@@ -396,6 +399,7 @@ describe("@chronoqueue/proto", () => {
             schemaId: "",
             schemaVersion: 0,
           },
+          headers: [],
           state: Proto.Message.Message_Metadata_State.PENDING,
           attemptsLeft: 3,
           leaseExpiry: "0",

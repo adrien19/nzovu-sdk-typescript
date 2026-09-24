@@ -24,20 +24,15 @@ PROTO_PKG := packages/proto
 PROTO_OUT := $(PROTO_PKG)/src/generated
 CLIENT_PKG := packages/client
 PACKAGES := packages/proto packages/client
-CHRONOQUEUE_REPO ?= adrien19/chronoqueue
-CHRONOQUEUE_BRANCH ?= develop
-CHRONOQUEUE_PROTO_PATH ?= proto
-
-
 # Default target
 help:
-	@echo "$(YELLOW)Chronoqueue TypeScript SDK - Available Targets:$(NC)"
+	@echo "$(YELLOW)Nzovu TypeScript SDK - Available Targets:$(NC)"
 	@echo ""
 	@echo "  $(GREEN)make install$(NC)         - Install production dependencies (pnpm ci)"
 	@echo "  $(GREEN)make install-dev$(NC)     - Install all dependencies (pnpm install)"
 	@echo "  $(GREEN)make update$(NC)          - Update dependencies (pnpm update)"
-	@echo "  $(GREEN)make update-proto$(NC)    - Download latest proto definitions from chronoqueue repo"
-	@echo "  $(GREEN)make check-proto$(NC)     - Verify proto files exist"
+	@echo "  $(GREEN)make update-proto$(NC)    - Vendor proto definitions from SOURCE at COMMIT"
+	@echo "  $(GREEN)make check-proto$(NC)     - Verify protocol source checksums"
 	@echo "  $(GREEN)make gen-proto$(NC)       - Generate TypeScript code from proto files using ts-proto"
 	@echo "  $(GREEN)make build-proto$(NC)     - Build proto package"
 	@echo "  $(GREEN)make build-client$(NC)    - Build client package"
@@ -58,55 +53,18 @@ help:
 	@echo "  $(GREEN)make all$(NC)             - Install, generate proto, and build all packages"
 	@echo ""
 
-# Download proto definitions from chronoqueue repository
+# Protocol sources are updated only from an explicit immutable local checkout.
 update-proto:
-	@echo "$(YELLOW)Downloading proto definitions from chronoqueue repository...$(NC)"
-	@echo "Fetching proto files from $(CHRONOQUEUE_REPO)/$(CHRONOQUEUE_BRANCH)..."
-	@rm -rf /tmp/chronoqueue-proto-download
-	@mkdir -p /tmp/chronoqueue-proto-download
-	@curl -sL -H "Accept: application/vnd.github.v3+json" \
-		"https://api.github.com/repos/$(CHRONOQUEUE_REPO)/tarball/$(CHRONOQUEUE_BRANCH)" \
-		-o /tmp/chronoqueue-proto-download/repo.tar.gz
-	@tar -xzf /tmp/chronoqueue-proto-download/repo.tar.gz -C /tmp/chronoqueue-proto-download
-	@rm -rf $(PROTO_PATH)/*
-	@mkdir -p $(PROTO_PATH)
-	@cp -r /tmp/chronoqueue-proto-download/*/$(CHRONOQUEUE_PROTO_PATH)/* $(PROTO_PATH)/
-	@rm -rf /tmp/chronoqueue-proto-download
-	@echo "$(GREEN)Proto definitions updated successfully!$(NC)"
-	@find $(PROTO_PATH) -name "*.proto" | wc -l | xargs echo "Downloaded proto files:"
-	@echo "Run 'make gen-proto' to regenerate TypeScript classes."
+	@node scripts/proto.mjs update --source "$(SOURCE)" --commit "$(COMMIT)"
 
-# Check if proto file exists
 check-proto:
-	@echo "$(YELLOW)Checking for proto files...$(NC)"
-	@if [ -z "$$(find $(PROTO_PATH) -name '*.proto' -type f)" ]; then \
-		echo "$(RED)Error: No proto files found in $(PROTO_PATH)$(NC)"; \
-		echo "Run 'make update-proto' to download proto definitions."; \
-		exit 1; \
-	fi
-	@echo "$(GREEN)Found $$(find $(PROTO_PATH) -name '*.proto' -type f | wc -l) proto file(s)$(NC)"
+	@node scripts/proto.mjs verify
 
-# Generate TypeScript code from proto files using ts-proto
-gen-proto: check-proto
-	@echo "$(YELLOW)Generating TypeScript code from proto files using ts-proto...$(NC)"
-	@if ! [ -x $(PROTO_PKG)/node_modules/.bin/protoc ]; then \
-		echo "$(RED)Error: protoc not found. Run 'pnpm install' first.$(NC)"; \
-		exit 1; \
-	fi
-	@if ! [ -x $(PROTO_PKG)/node_modules/.bin/protoc-gen-ts_proto ]; then \
-		echo "$(RED)Error: ts-proto not found. Run 'pnpm install' first.$(NC)"; \
-		exit 1; \
-	fi
-	@rm -rf $(PROTO_OUT)
-	@mkdir -p $(PROTO_OUT)
-	@cd $(PROTO_PKG) && ./node_modules/.bin/protoc \
-		--plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto \
-		--ts_proto_out=./src/generated \
-		--ts_proto_opt=outputServices=grpc-js,esModuleInterop=true,forceLong=string,useOptionals=messages \
-		-I ../.. \
-		-I ../../$(PROTO_PATH) \
-		$$(find ../../$(PROTO_PATH) -name "*.proto" -type f)
-	@echo "$(GREEN)TypeScript code generated successfully in $(PROTO_OUT)!$(NC)"
+check-generated:
+	@node scripts/proto.mjs check
+
+gen-proto:
+	@node scripts/proto.mjs generate
 
 # Build proto package
 build-proto: gen-proto
@@ -160,8 +118,11 @@ test-mcp: build-client
 	fi
 
 # Test all packages
-test-all: test-proto test-client test-mcp
+test-all: test-tooling test-proto test-client test-mcp
 	@echo "$(GREEN)All tests passed!$(NC)"
+
+test-tooling:
+	@$(PNPM) run test:tooling
 
 # Test with coverage (requires build-all to ensure dependencies are built)
 test-coverage: build-all
@@ -254,9 +215,10 @@ format:
 
 
 # Type checking
-typecheck:
+typecheck: gen-proto
 	@echo "$(YELLOW)Running TypeScript type checking...$(NC)"
-	@$(TSC) --build --force
+	@$(TSC) --build packages/proto packages/client --force
+	@$(PNPM) --dir packages/mcp exec tsc --noEmit
 	@echo "$(GREEN)Type checking complete!$(NC)"
 
 
@@ -269,7 +231,9 @@ build: build-all
 
 
 # Run all CI checks
-ci: lint typecheck test-all build-all
+ci: gen-proto lint typecheck test-all build-all check-generated
+	@$(PNPM) run check:identity
+	@$(PNPM) run check:imports
 	@echo "$(GREEN)All CI checks passed!$(NC)"
 
 

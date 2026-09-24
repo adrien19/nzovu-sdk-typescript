@@ -9,6 +9,6 @@ module.exports = {
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
   moduleNameMapper: {
-    "^@chronoqueue/proto(.*)$": "<rootDir>/../proto/src$1",
+    "^@nzovu/proto(.*)$": "<rootDir>/../proto/src$1",
   },
 };

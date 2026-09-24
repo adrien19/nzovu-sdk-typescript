@@ -2,7 +2,7 @@
  * Agent Worker Types
  *
  * Defines task types and interfaces for the agent orchestration system.
- * Tasks are posted to ChronoQueue and consumed by agent workers.
+ * Tasks are posted to Nzovu and consumed by agent workers.
  */
 
 /**
@@ -159,7 +159,7 @@ export interface WorkerConfig {
   workerId: string;
   /** Queue to consume from */
   queueName: string;
-  /** ChronoQueue server address */
+  /** Nzovu server address */
   serverAddress: string;
   /** Maximum concurrent tasks */
   concurrency: number;

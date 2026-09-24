@@ -2,7 +2,7 @@
  * Bulk Message Posting Example
  *
  * This example demonstrates how to use the postMessagesBulk API to post
- * multiple messages to a ChronoQueue in a single operation.
+ * multiple messages to a Nzovu in a single operation.
  *
  * Features demonstrated:
  * - Posting messages in bulk with ALL_OR_NOTHING mode (atomic)
@@ -13,23 +13,23 @@
 
 import {
   BulkMessageErrorCode,
-  ChronoQueueClient,
+  NzovuClient,
   Message,
   MessagePostResult,
   TransactionMode,
-} from "@chronoqueue/client";
+} from "@nzovu/client";
 
 async function main() {
   // Initialize client
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: {
-      address: "localhost:50051",
+      address: "localhost:9000",
     },
   });
 
   try {
     await client.connect();
-    console.log("✓ Connected to ChronoQueue server\n");
+    console.log("✓ Connected to Nzovu server\n");
 
     // Create a queue for testing
     const queueName = "bulk-demo-queue";

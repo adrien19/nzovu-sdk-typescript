@@ -1,16 +1,16 @@
 /**
  * Logging Best Practices Example
  *
- * This example demonstrates different logging configurations for the ChronoQueue client.
+ * This example demonstrates different logging configurations for the Nzovu client.
  */
 
 import {
-  ChronoQueueClient,
+  NzovuClient,
   ConsoleLogger,
   LogLevel,
   Logger,
   SilentLogger,
-} from "@chronoqueue/client";
+} from "@nzovu/client";
 
 // ============================================================================
 // Example 1: Default Logging (WARN level)
@@ -18,7 +18,7 @@ import {
 async function defaultLoggingExample() {
   console.log("\n=== Example 1: Default Logging (WARN level) ===\n");
 
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
   });
   // Default logger: Only shows WARN and ERROR messages
@@ -34,7 +34,7 @@ async function defaultLoggingExample() {
 async function silentLoggingExample() {
   console.log("\n=== Example 2: Silent Logging (No output) ===\n");
 
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
     logger: new SilentLogger(), // No SDK logs at all
   });
@@ -50,7 +50,7 @@ async function silentLoggingExample() {
 async function debugLoggingExample() {
   console.log("\n=== Example 3: Debug Logging (All messages) ===\n");
 
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
     logger: new ConsoleLogger(LogLevel.DEBUG), // Show all logs including DEBUG
   });
@@ -108,7 +108,7 @@ class CustomLogger implements Logger {
 async function customLoggingExample() {
   console.log("\n=== Example 4: Custom Logger ===\n");
 
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
     logger: new CustomLogger(), // Your custom implementation
   });
@@ -138,8 +138,8 @@ class WinstonLogger implements Logger {
                 winston.format.json()
             ),
             transports: [
-                new winston.transports.File({ filename: 'chronoqueue-error.log', level: 'error' }),
-                new winston.transports.File({ filename: 'chronoqueue-combined.log' }),
+                new winston.transports.File({ filename: 'nzovu-error.log', level: 'error' }),
+                new winston.transports.File({ filename: 'nzovu-combined.log' }),
                 new winston.transports.Console({ format: winston.format.simple() })
             ],
         });
@@ -163,7 +163,7 @@ class WinstonLogger implements Logger {
 }
 
 async function winstonLoggingExample() {
-    const client = new ChronoQueueClient({
+    const client = new NzovuClient({
         connection: { address: 'host.docker.internal:9000' },
         logger: new WinstonLogger(),
     });
@@ -179,7 +179,7 @@ async function winstonLoggingExample() {
 
 async function main() {
   console.log("╔═══════════════════════════════════════════════════════════╗");
-  console.log("║        ChronoQueue Client - Logging Best Practices       ║");
+  console.log("║        Nzovu Client - Logging Best Practices       ║");
   console.log("╚═══════════════════════════════════════════════════════════╝");
 
   console.log("\n📝 Logging Recommendations:\n");
@@ -202,7 +202,7 @@ async function main() {
     await customLoggingExample();
   } catch (err) {
     // Note: These examples will fail without a running server
-    console.log("\n⚠️  Examples require a running ChronoQueue server");
+    console.log("\n⚠️  Examples require a running Nzovu server");
     console.log(
       "   The purpose is to demonstrate configuration, not functionality",
     );

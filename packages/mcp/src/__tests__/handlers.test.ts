@@ -9,7 +9,7 @@ describe('Tool Handlers', () => {
   let mockClient: any;
 
   beforeEach(() => {
-    // Mock client with nested structure matching real ChronoQueueClient
+    // Mock client with nested structure matching real NzovuClient
     mockClient = {
       queues: {
         createQueue: vi.fn(),

@@ -1,11 +1,11 @@
-# Using ChronoQueue MCP Server with VS Code
+# Using Nzovu MCP Server with VS Code
 
-The ChronoQueue MCP server is now integrated with VS Code through GitHub Copilot Chat!
+The Nzovu MCP server is now integrated with VS Code through GitHub Copilot Chat!
 
 ## Prerequisites
 
 1. **VS Code**: Latest version with GitHub Copilot Chat extension
-2. **ChronoQueue Server**: Running on `localhost:9000` (or configure your address)
+2. **Nzovu Server**: Running on `localhost:9000` (or configure your address)
 3. **MCP Server**: Built and ready in `/mcp/dist/`
 
 ## Setup
@@ -16,12 +16,12 @@ The MCP server is already configured in `.vscode/mcp.json`:
 {
   "github.copilot.chat.mcp": {
     "servers": {
-      "chronoqueue": {
+      "nzovu": {
         "command": "node",
         "args": ["${workspaceFolder}/mcp/dist/index.js"],
         "env": {
-          "CHRONOQUEUE_ADDRESS": "localhost:9000",
-          "CHRONOQUEUE_INSECURE": "true"
+          "NZOVU_ADDRESS": "localhost:9000",
+          "NZOVU_INSECURE": "true"
         }
       }
     }
@@ -31,11 +31,11 @@ The MCP server is already configured in `.vscode/mcp.json`:
 
 ## Quick Start
 
-### 1. Start ChronoQueue Server
+### 1. Start Nzovu Server
 
 ```bash
-# Terminal 1: Start ChronoQueue
-cd /workspaces/chronoqueue
+# Terminal 1: Start Nzovu
+cd /workspaces/nzovu
 export REDIS_PASSWORD='mypassword' && make server-dev
 ```
 
@@ -60,9 +60,9 @@ This will load the MCP configuration.
 
 Press `Ctrl+Shift+I` (or `Cmd+Shift+I` on Mac) or click the chat icon in the sidebar.
 
-### 5. Use ChronoQueue Tools
+### 5. Use Nzovu Tools
 
-You can now ask Copilot to interact with ChronoQueue:
+You can now ask Copilot to interact with Nzovu:
 
 **Example prompts:**
 
@@ -92,7 +92,7 @@ Create a schedule to post a daily report at 9 AM
 
 ## Available Tools
 
-When you ask Copilot to work with ChronoQueue, it has access to 13 tools:
+When you ask Copilot to work with Nzovu, it has access to 13 tools:
 
 ### Queue Management
 
@@ -121,20 +121,20 @@ When you ask Copilot to work with ChronoQueue, it has access to 13 tools:
 
 ## Configuration Options
 
-### Custom ChronoQueue Address
+### Custom Nzovu Address
 
-If your ChronoQueue server is on a different host/port, update `.vscode/mcp.json`:
+If your Nzovu server is on a different host/port, update `.vscode/mcp.json`:
 
 ```json
 {
   "github.copilot.chat.mcp": {
     "servers": {
-      "chronoqueue": {
+      "nzovu": {
         "command": "node",
         "args": ["${workspaceFolder}/mcp/dist/index.js"],
         "env": {
-          "CHRONOQUEUE_ADDRESS": "your-host:your-port",
-          "CHRONOQUEUE_INSECURE": "true"
+          "NZOVU_ADDRESS": "your-host:your-port",
+          "NZOVU_INSECURE": "true"
         }
       }
     }
@@ -150,15 +150,15 @@ For secure connections:
 {
   "github.copilot.chat.mcp": {
     "servers": {
-      "chronoqueue": {
+      "nzovu": {
         "command": "node",
         "args": ["${workspaceFolder}/mcp/dist/index.js"],
         "env": {
-          "CHRONOQUEUE_ADDRESS": "chronoqueue.example.com:443",
-          "CHRONOQUEUE_INSECURE": "false",
-          "CHRONOQUEUE_CERT_PATH": "/path/to/client.crt",
-          "CHRONOQUEUE_KEY_PATH": "/path/to/client.key",
-          "CHRONOQUEUE_CA_PATH": "/path/to/ca.crt"
+          "NZOVU_ADDRESS": "nzovu.example.com:443",
+          "NZOVU_INSECURE": "false",
+          "NZOVU_CERT_PATH": "/path/to/client.crt",
+          "NZOVU_KEY_PATH": "/path/to/client.key",
+          "NZOVU_CA_PATH": "/path/to/ca.crt"
         }
       }
     }
@@ -168,29 +168,29 @@ For secure connections:
 
 ### Multiple Environments
 
-You can configure multiple ChronoQueue instances:
+You can configure multiple Nzovu instances:
 
 ```json
 {
   "github.copilot.chat.mcp": {
     "servers": {
-      "chronoqueue-dev": {
+      "nzovu-dev": {
         "command": "node",
         "args": ["${workspaceFolder}/mcp/dist/index.js"],
         "env": {
-          "CHRONOQUEUE_ADDRESS": "localhost:9000",
-          "CHRONOQUEUE_INSECURE": "true"
+          "NZOVU_ADDRESS": "localhost:9000",
+          "NZOVU_INSECURE": "true"
         }
       },
-      "chronoqueue-prod": {
+      "nzovu-prod": {
         "command": "node",
         "args": ["${workspaceFolder}/mcp/dist/index.js"],
         "env": {
-          "CHRONOQUEUE_ADDRESS": "prod.example.com:443",
-          "CHRONOQUEUE_INSECURE": "false",
-          "CHRONOQUEUE_CERT_PATH": "/path/to/prod-client.crt",
-          "CHRONOQUEUE_KEY_PATH": "/path/to/prod-client.key",
-          "CHRONOQUEUE_CA_PATH": "/path/to/prod-ca.crt"
+          "NZOVU_ADDRESS": "prod.example.com:443",
+          "NZOVU_INSECURE": "false",
+          "NZOVU_CERT_PATH": "/path/to/prod-client.crt",
+          "NZOVU_KEY_PATH": "/path/to/prod-client.key",
+          "NZOVU_CA_PATH": "/path/to/prod-ca.crt"
         }
       }
     }
@@ -214,7 +214,7 @@ cd mcp && npm run build
 
 **Error**: "gRPC connection refused" or "ECONNREFUSED"
 
-**Solution**: Verify ChronoQueue server is running:
+**Solution**: Verify Nzovu server is running:
 
 ```bash
 # Check if server is running (gRPC health check)
@@ -240,12 +240,12 @@ export REDIS_PASSWORD='mypassword' && make server-dev
 ```bash
 # Run MCP server directly to see errors
 cd mcp
-CHRONOQUEUE_ADDRESS=localhost:9000 node dist/index.js
+NZOVU_ADDRESS=localhost:9000 node dist/index.js
 ```
 
 ## Example Workflow
 
-Here's a complete example of using ChronoQueue through Copilot Chat:
+Here's a complete example of using Nzovu through Copilot Chat:
 
 ```
 You: Create a queue called "order-processing" with max 5 retry attempts
@@ -300,16 +300,16 @@ Post a message to the notifications queue with:
 
 ## Benefits
 
-Using ChronoQueue through Copilot Chat provides:
+Using Nzovu through Copilot Chat provides:
 
 - **Natural language interface** - No need to remember exact API syntax
 - **Context-aware suggestions** - Copilot understands your queue operations
 - **Rapid prototyping** - Test queue operations without writing code
-- **Documentation** - Ask Copilot about ChronoQueue features
+- **Documentation** - Ask Copilot about Nzovu features
 - **Workflow automation** - Chain multiple operations in a conversation
 
 ## More Information
 
 - [MCP Server Documentation](./README.md)
-- [ChronoQueue Documentation](../README.md)
+- [Nzovu Documentation](../README.md)
 - [VS Code MCP Integration](https://code.visualstudio.com/docs/copilot/copilot-mcp)

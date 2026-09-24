@@ -1,4 +1,4 @@
-import { Duration } from "@chronoqueue/proto";
+import { Duration } from "@nzovu/proto";
 
 /**
  * Parse duration string (e.g., "30s", "5m", "1h") to Duration object

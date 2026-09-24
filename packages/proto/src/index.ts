@@ -1,9 +1,9 @@
 /**
- * @chronoqueue/proto
+ * @nzovu/proto
  *
- * Internal package containing compiled protobuf definitions for ChronoQueue.
+ * Internal package containing compiled protobuf definitions for Nzovu.
  * This package is not intended for direct use by external applications.
- * Use @chronoqueue/client instead.
+ * Use @nzovu/client instead.
  */
 
 // Export all generated proto types with namespaces to avoid conflicts

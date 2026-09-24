@@ -1,4 +1,4 @@
-import { Message, QueueServiceTypes } from "@chronoqueue/proto";
+import { Message, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../src/connection";
 import { MessageClient } from "../src/message";
 
@@ -42,6 +42,7 @@ describe("MessageClient - postMessagesBulk", () => {
           schemaId: "",
           schemaVersion: 0,
         },
+        headers: [],
         state: Message.Message_Metadata_State.PENDING,
         attemptsLeft: 3,
         leaseDuration: { seconds: "30", nanos: 0 },
@@ -56,7 +57,7 @@ describe("MessageClient - postMessagesBulk", () => {
 
   beforeEach(() => {
     connection = new Connection({
-      address: "localhost:50051",
+      address: "localhost:9000",
     });
     mockClient = createMockClient();
 

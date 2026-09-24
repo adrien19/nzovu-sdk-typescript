@@ -163,7 +163,7 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           npm version $VERSION --no-git-tag-version --allow-same-version
-          echo "Updated @chronoqueue/proto to version $VERSION"
+          echo "Updated @nzovu/proto to version $VERSION"
 
       - name: Build proto package
         run: make build-proto
@@ -174,22 +174,22 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           TAG="${{ needs.validate.outputs.npm-tag }}"
-          echo "Publishing @chronoqueue/proto with tag: $TAG"
+          echo "Publishing @nzovu/proto with tag: $TAG"
           pnpm publish --access public --tag $TAG --no-git-checks
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          name: "@chronoqueue/proto ${{ needs.validate.outputs.version }}"
+          name: "@nzovu/proto ${{ needs.validate.outputs.version }}"
           body: |
-            ## @chronoqueue/proto ${{ needs.validate.outputs.version }}
+            ## @nzovu/proto ${{ needs.validate.outputs.version }}
 
             Published proto package to npm.
 
             ### Installation
             ```bash
-            npm install @chronoqueue/proto@${{ needs.validate.outputs.version }}
+            npm install @nzovu/proto@${{ needs.validate.outputs.version }}
             ```
           draft: false
           prerelease: ${{ contains(github.ref, '-beta') }}
@@ -232,7 +232,7 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           npm version $VERSION --no-git-tag-version --allow-same-version
-          echo "Updated @chronoqueue/client to version $VERSION"
+          echo "Updated @nzovu/client to version $VERSION"
 
       - name: Build all packages
         run: make build-all
@@ -243,22 +243,22 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           TAG="${{ needs.validate.outputs.npm-tag }}"
-          echo "Publishing @chronoqueue/client with tag: $TAG"
+          echo "Publishing @nzovu/client with tag: $TAG"
           pnpm publish --access public --tag $TAG --no-git-checks
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          name: "@chronoqueue/client ${{ needs.validate.outputs.version }}"
+          name: "@nzovu/client ${{ needs.validate.outputs.version }}"
           body: |
-            ## @chronoqueue/client ${{ needs.validate.outputs.version }}
+            ## @nzovu/client ${{ needs.validate.outputs.version }}
 
             Published client package to npm.
 
             ### Installation
             ```bash
-            npm install @chronoqueue/client@${{ needs.validate.outputs.version }}
+            npm install @nzovu/client@${{ needs.validate.outputs.version }}
             ```
           draft: false
           prerelease: ${{ contains(github.ref, '-beta') }}
@@ -301,7 +301,7 @@ jobs:
         run: |
           VERSION="${{ needs.validate.outputs.version }}"
           npm version $VERSION --no-git-tag-version --allow-same-version
-          echo "Updated @chronoqueue/mcp-server to version $VERSION"
+          echo "Updated @nzovu/mcp-server to version $VERSION"
 
       - name: Build all packages
         run: make build-all
@@ -312,31 +312,31 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           TAG="${{ needs.validate.outputs.npm-tag }}"
-          echo "Publishing @chronoqueue/mcp-server with tag: $TAG"
+          echo "Publishing @nzovu/mcp-server with tag: $TAG"
           pnpm publish --access public --tag $TAG --no-git-checks
 
       - name: Create GitHub Release
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          name: "@chronoqueue/mcp-server ${{ needs.validate.outputs.version }}"
+          name: "@nzovu/mcp-server ${{ needs.validate.outputs.version }}"
           body: |
-            ## @chronoqueue/mcp-server ${{ needs.validate.outputs.version }}
+            ## @nzovu/mcp-server ${{ needs.validate.outputs.version }}
 
             Published MCP server package to npm.
 
             ### Installation
             ```bash
-            npm install -g @chronoqueue/mcp-server@${{ needs.validate.outputs.version }}
+            npm install -g @nzovu/mcp-server@${{ needs.validate.outputs.version }}
             ```
 
             ### Usage with Claude Desktop
             ```json
             {
               "mcpServers": {
-                "chronoqueue": {
+                "nzovu": {
                   "command": "npx",
-                  "args": ["-y", "@chronoqueue/mcp-server"]
+                  "args": ["-y", "@nzovu/mcp-server"]
                 }
               }
             }

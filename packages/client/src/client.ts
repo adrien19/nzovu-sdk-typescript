@@ -8,9 +8,9 @@ import { SchemaClient } from "./schema";
 import { ClientConfig } from "./types";
 
 /**
- * Main ChronoQueue client
+ * Main Nzovu client
  */
-export class ChronoQueueClient {
+export class NzovuClient {
   private connection: Connection;
   private readonly _workerId?: string;
 
@@ -41,14 +41,14 @@ export class ChronoQueueClient {
   }
 
   /**
-   * Connect to ChronoQueue server
+   * Connect to Nzovu server
    */
   async connect(): Promise<void> {
     await this.connection.connect();
   }
 
   /**
-   * Disconnect from ChronoQueue server
+   * Disconnect from Nzovu server
    */
   async disconnect(): Promise<void> {
     // Stop all active heartbeats before disconnecting

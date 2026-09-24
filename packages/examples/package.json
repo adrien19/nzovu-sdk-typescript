@@ -1,7 +1,7 @@
 {
-  "name": "@chronoqueue/examples",
-  "version": "0.1.0",
-  "description": "Example apps for ChronoQueue TypeScript SDK",
+  "name": "@nzovu/examples",
+  "version": "0.0.1-dev.0",
+  "description": "Example apps for Nzovu TypeScript SDK",
   "main": "notification-service.ts",
   "scripts": {
     "start:notification": "ts-node notification-service.ts",
@@ -13,7 +13,7 @@
     "prepublishOnly": "node ../../scripts/block-release.mjs"
   },
   "dependencies": {
-    "@chronoqueue/client": "workspace:*"
+    "@nzovu/client": "workspace:*"
   },
   "devDependencies": {
     "ts-node": "^10.9.2",

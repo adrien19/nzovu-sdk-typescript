@@ -2,7 +2,7 @@ import {
   Duration,
   Message as ProtoMessage,
   QueueServiceTypes,
-} from "@chronoqueue/proto";
+} from "@nzovu/proto";
 import { Connection } from "../connection";
 import { Logger, defaultLogger } from "../logger";
 import { handleGrpcError, validateRequired } from "../utils/errors";
@@ -123,8 +123,8 @@ export class MessageClient {
    * @param transactionMode - Transaction mode (ALL_OR_NOTHING or BEST_EFFORT), default: ALL_OR_NOTHING
    * @returns PostMessagesBulkResponse with success counts and per-message results
    *
-   * @throws {ChronoQueueError} If messages array is empty or exceeds 1000
-   * @throws {ChronoQueueError} If queueName is empty
+   * @throws {NzovuError} If messages array is empty or exceeds 1000
+   * @throws {NzovuError} If queueName is empty
    * @throws {Error} For other gRPC errors
    *
    * @example
@@ -621,7 +621,8 @@ export class MessageClient {
       return new Promise<ProtoMessage.Message[]>((resolve, reject) => {
         const request: QueueServiceTypes.PeekQueueMessagesRequest = {
           queueName,
-          limit,
+          pageSize: Number(limit),
+          pageToken: "",
           priorityRange: undefined,
         };
 

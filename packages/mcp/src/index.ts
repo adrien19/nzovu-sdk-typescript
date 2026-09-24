@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
+import { VERSION } from './version.js';
+
 /**
- * ChronoQueue MCP Server
+ * Nzovu MCP Server
  *
  * Entry point for the Model Context Protocol server that exposes
- * ChronoQueue operations as AI-accessible tools.
+ * Nzovu operations as AI-accessible tools.
  */
 
 import { createMCPServer } from './server.js';
@@ -18,8 +20,8 @@ async function main() {
     await server.connect(transport);
 
     // Log to stderr to avoid interfering with MCP protocol on stdout
-    console.error('ChronoQueue MCP Server running on stdio');
-    console.error('Version: 0.1.0');
+    console.error('Nzovu MCP Server running on stdio');
+    console.error(`Version: ${VERSION}`);
   } catch (error) {
     console.error('Fatal error starting MCP server:', error);
     process.exit(1);

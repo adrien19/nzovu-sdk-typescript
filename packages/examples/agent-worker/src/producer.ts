@@ -1,12 +1,12 @@
 /**
  * Task Producer
  *
- * Demonstrates how to post agent tasks to ChronoQueue.
+ * Demonstrates how to post agent tasks to Nzovu.
  * Tasks are consumed and executed by agent workers.
  */
 
-import { ChronoQueueClient } from "@chronoqueue/client";
-import { Message } from "@chronoqueue/proto";
+import { NzovuClient } from "@nzovu/client";
+import { Message } from "@nzovu/proto";
 import {
   TaskType,
   type AgentTaskPayload,
@@ -16,8 +16,7 @@ import {
 } from "./types.js";
 
 // Configuration
-const CHRONOQUEUE_ADDRESS =
-  process.env.CHRONOQUEUE_ADDRESS || "host.docker.internal:9000";
+const NZOVU_ADDRESS = process.env.NZOVU_ADDRESS || "host.docker.internal:9000";
 const QUEUE_NAME = process.env.QUEUE_NAME || "agent-tasks";
 
 /**
@@ -28,10 +27,10 @@ function createTaskId(prefix: string): string {
 }
 
 /**
- * Post a task to ChronoQueue
+ * Post a task to Nzovu
  */
 async function postTask(
-  client: ChronoQueueClient,
+  client: NzovuClient,
   task: AgentTaskPayload,
   priority: number = 5,
 ): Promise<void> {
@@ -106,14 +105,14 @@ function createSampleTasks(): AgentTaskPayload[] {
  */
 async function main(): Promise<void> {
   console.log("🚀 Agent Task Producer");
-  console.log(`   Server: ${CHRONOQUEUE_ADDRESS}`);
+  console.log(`   Server: ${NZOVU_ADDRESS}`);
   console.log(`   Queue: ${QUEUE_NAME}`);
   console.log("");
 
-  // Connect to ChronoQueue
-  const client = new ChronoQueueClient({
+  // Connect to Nzovu
+  const client = new NzovuClient({
     connection: {
-      address: CHRONOQUEUE_ADDRESS,
+      address: NZOVU_ADDRESS,
     },
   });
 

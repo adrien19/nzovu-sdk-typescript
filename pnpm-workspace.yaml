@@ -6,8 +6,8 @@ packages:
 
 # Only allow installing packages that are at least a day old
 minimumReleaseAge: 1440
-# Allow depending on just published ChronoQueue packages
+# Allow depending on just published Nzovu packages
 minimumReleaseAgeExclude:
-  - "@chronoqueue/*"
+  - "@nzovu/*"
 
 ignoreScripts: true

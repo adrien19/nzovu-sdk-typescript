@@ -1,6 +1,6 @@
-import { ChronoQueueClient, Message } from "@chronoqueue/client";
+import { NzovuClient, Message } from "@nzovu/client";
 
-const client = new ChronoQueueClient({
+const client = new NzovuClient({
   connection: { address: "host.docker.internal:9000" },
 });
 

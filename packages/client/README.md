@@ -1,23 +1,23 @@
-# @chronoqueue/client
+# @nzovu/client
 
-TypeScript/Node.js client SDK for ChronoQueue – a distributed task queue system with priorities, delayed execution, scheduled tasks, and schema validation.
+TypeScript/Node.js client SDK for Nzovu – a distributed task queue system with priorities, delayed execution, scheduled tasks, and schema validation.
 
 ## Installation
 
 ```bash
-npm install @chronoqueue/client
+npm install @nzovu/client
 # or
-pnpm add @chronoqueue/client
+pnpm add @nzovu/client
 # or
-yarn add @chronoqueue/client
+yarn add @nzovu/client
 ```
 
 ## Quick Start
 
 ```typescript
-import { ChronoQueueClient } from "@chronoqueue/client";
+import { NzovuClient } from "@nzovu/client";
 
-const client = new ChronoQueueClient({
+const client = new NzovuClient({
   connection: { address: "localhost:9000" },
 });
 await client.connect();
@@ -112,7 +112,7 @@ await client.queues.deleteQueue("orders");
 ### Message Operations
 
 ```typescript
-import { Message, parseDuration } from '@chronoqueue/client';
+import { Message, parseDuration } from '@nzovu/client';
 
 // Post message
 await client.messages.postMessage('orders', {
@@ -220,12 +220,12 @@ await client.schemas.deleteSchema("store-cart.v1");
 ## Error Handling
 
 ```typescript
-import { ChronoQueueError, ErrorCode } from "@chronoqueue/client";
+import { NzovuError, ErrorCode } from "@nzovu/client";
 
 try {
   await client.queues.createQueue("my-queue");
 } catch (error) {
-  if (error instanceof ChronoQueueError) {
+  if (error instanceof NzovuError) {
     switch (error.code) {
       case ErrorCode.ALREADY_EXISTS:
         console.log("Queue already exists");
@@ -245,9 +245,9 @@ try {
 ### Connection Options
 
 ```typescript
-const client = new ChronoQueueClient({
+const client = new NzovuClient({
   connection: {
-    address: "localhost:50051",
+    address: "localhost:9000",
 
     // Optional: TLS credentials
     credentials: grpc.credentials.createSsl(
@@ -296,11 +296,11 @@ Messages progress through these states:
 
 See the TypeScript definitions for complete API documentation. Key exports:
 
-- `ChronoQueueClient` - Main client class
+- `NzovuClient` - Main client class
 - `QueueClient` - Queue management operations
 - `MessageClient` - Message operations
 - `ScheduleClient` - Scheduled task operations
-- **Types from `@chronoqueue/proto`** (re-exported):
+- **Types from `@nzovu/proto`** (re-exported):
   - `ProtoMessage` – Message protocol types and enums
   - `ProtoSchedule` – Schedule protocol types and enums
   - `ProtoQueue` – Queue protocol types and enums
@@ -308,16 +308,16 @@ See the TypeScript definitions for complete API documentation. Key exports:
 
 ### Importing Types
 
-You can import protocol types directly from `@chronoqueue/client`:
+You can import protocol types directly from `@nzovu/client`:
 
 ```typescript
-import { ProtoMessage, ProtoSchedule, ProtoQueue } from "@chronoqueue/client";
+import { ProtoMessage, ProtoSchedule, ProtoQueue } from "@nzovu/client";
 
 // Example: use message state enum
 const state = ProtoMessage.Message_Metadata_State.PENDING;
 ```
 
-These types are re-exported from `@chronoqueue/proto` for convenience, so you do not need to install or import from `@chronoqueue/proto` directly.
+These types are re-exported from `@nzovu/proto` for convenience, so you do not need to install or import from `@nzovu/proto` directly.
 
 ## License
 

@@ -2,7 +2,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "@chronoqueue/*": ["packages/*"]
+      "@nzovu/*": ["packages/*"]
     }
   },
   "files": ["./packages/client/src/index.ts"]

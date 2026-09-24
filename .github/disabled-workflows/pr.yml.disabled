@@ -198,7 +198,7 @@ jobs:
         run: make gen-proto
 
       - name: Build proto package
-        run: pnpm --filter @chronoqueue/proto... build
+        run: pnpm --filter @nzovu/proto... build
 
       - name: Run tests with coverage
         run: make test-coverage
@@ -265,7 +265,7 @@ jobs:
             if [ -d "$pkg" ]; then
               size=$(du -sh "$pkg" | cut -f1)
               package_name=$(basename $(dirname "$pkg"))
-              echo "| @chronoqueue/$package_name | $size |" >> $GITHUB_STEP_SUMMARY
+              echo "| @nzovu/$package_name | $size |" >> $GITHUB_STEP_SUMMARY
             fi
           done
 

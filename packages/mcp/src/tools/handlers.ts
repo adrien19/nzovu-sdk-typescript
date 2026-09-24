@@ -4,7 +4,7 @@
  * Implements the actual logic for each MCP tool
  */
 
-import { ChronoQueueClient, Message, Queue } from '@chronoqueue/client';
+import { NzovuClient, Message, Queue } from '@nzovu/client';
 import { parseDuration } from '../config.js';
 import {
   AcknowledgeMessageInput,
@@ -44,7 +44,7 @@ import {
 export async function handleToolCall(
   toolName: string,
   args: unknown,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   switch (toolName) {
     // Queue Management
@@ -132,10 +132,7 @@ export async function handleToolCall(
 
 // Queue Management Handlers
 
-async function handleCreateQueue(
-  args: CreateQueueInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleCreateQueue(args: CreateQueueInput, client: NzovuClient): Promise<string> {
   const queueName = args.queue_name || args.name;
   if (!queueName) {
     throw new Error('Queue name is required');
@@ -262,15 +259,12 @@ Auto-create DLQ: ${args.auto_create_dlq !== false ? 'Yes' : 'No'}`;
   return result;
 }
 
-async function handleDeleteQueue(
-  args: DeleteQueueInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleDeleteQueue(args: DeleteQueueInput, client: NzovuClient): Promise<string> {
   await client.queues.deleteQueue(args.queue_name);
   return `✓ Queue '${args.queue_name}' deleted successfully`;
 }
 
-async function handleListQueues(args: ListQueuesInput, client: ChronoQueueClient): Promise<string> {
+async function handleListQueues(args: ListQueuesInput, client: NzovuClient): Promise<string> {
   const prefix = args.prefix || '';
   const queues = await client.queues.listQueues(prefix);
 
@@ -320,10 +314,7 @@ async function handleListQueues(args: ListQueuesInput, client: ChronoQueueClient
   return result;
 }
 
-async function handleGetQueueState(
-  args: GetQueueStateInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleGetQueueState(args: GetQueueStateInput, client: NzovuClient): Promise<string> {
   const response = await client.queues.getQueueState(args.queue_name);
   const stateCounts = response.stateCounts || {};
 
@@ -338,10 +329,7 @@ Messages:
 
 // Message Operation Handlers
 
-async function handlePostMessage(
-  args: PostMessageInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handlePostMessage(args: PostMessageInput, client: NzovuClient): Promise<string> {
   // Parse lease_duration from string (e.g., "5m") to seconds
   let leaseDurationSeconds = 30;
   if (args.lease_duration) {
@@ -361,6 +349,7 @@ async function handlePostMessage(
         schemaId: args.schema_id || '',
         schemaVersion: args.schema_version || 0,
       },
+      headers: [],
       state: Message.Message_Metadata_State.PENDING,
       attemptsLeft: 3,
       leaseDuration: {
@@ -388,7 +377,7 @@ ${args.schema_id ? `Schema: ${args.schema_id}${args.schema_version ? ` v${args.s
 
 async function handlePostMessagesBulk(
   args: PostMessagesBulkInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const queueName = args.queue_name;
   const messagesInput = args.messages;
@@ -427,6 +416,7 @@ async function handlePostMessagesBulk(
           schemaId: msgInput.schema_id || '',
           schemaVersion: msgInput.schema_version || 0,
         },
+        headers: [],
         state: Message.Message_Metadata_State.PENDING,
         attemptsLeft: 3,
         leaseDuration: {
@@ -498,7 +488,7 @@ function getErrorCodeName(errorCode: number): string {
 
 async function handleGetNextMessage(
   args: GetNextMessageInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   // Parse lease_duration if provided
   let leaseDurationSeconds = 30;
@@ -564,10 +554,7 @@ Content Type: ${contentType}`;
   return result;
 }
 
-async function handlePeekMessages(
-  args: PeekMessagesInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handlePeekMessages(args: PeekMessagesInput, client: NzovuClient): Promise<string> {
   const limit = args.limit || 10;
   const messages = await client.messages.peekQueueMessages(args.queue_name, limit.toString());
 
@@ -603,7 +590,7 @@ async function handlePeekMessages(
 
 async function handleAcknowledgeMessage(
   args: AcknowledgeMessageInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const stateMap = {
     completed: Message.Message_Metadata_State.COMPLETED,
@@ -628,7 +615,7 @@ Status: ${args.status}`;
 
 async function handleRenewMessageLease(
   args: RenewMessageLeaseInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   // Parse lease_duration from string to seconds if provided
   let leaseDurationSeconds: number | undefined;
@@ -657,7 +644,7 @@ Remaining Time: ${remainingSeconds}s`;
 
 async function handleCreateSchedule(
   args: CreateScheduleInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   if (!args.schedule_type) {
     throw new Error('schedule_type is required');
@@ -675,7 +662,7 @@ async function handleCreateSchedule(
     state: 0, // SCHEDULED
     queueName: args.queue_name,
     messageIds: [],
-    exclusivityKey: '',
+    headers: [],
     stateMessage: '',
     priority: String(args.priority || 5),
     hasMaxMessages: false,
@@ -761,10 +748,7 @@ ${scheduleInfo}
 Enabled: ${args.enabled !== false ? 'Yes' : 'No'}`;
 }
 
-async function handleListSchedules(
-  args: ListSchedulesInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleListSchedules(args: ListSchedulesInput, client: NzovuClient): Promise<string> {
   const prefix = args.prefix || '';
   const schedules = await client.schedules.listSchedules(prefix);
 
@@ -794,7 +778,7 @@ async function handleListSchedules(
 
 async function handleDeleteSchedule(
   args: DeleteScheduleInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   await client.schedules.deleteSchedule(args.schedule_id);
   return `✓ Schedule '${args.schedule_id}' deleted successfully`;
@@ -804,7 +788,7 @@ async function handleDeleteSchedule(
 
 async function handleRegisterSchema(
   args: RegisterSchemaInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const response = await client.schemas.registerSchema(args.schema_id, args.content, {
     name: args.name,
@@ -823,10 +807,7 @@ Created: ${response.createdAt}`;
 
 // Message Cancel Handler
 
-async function handleCancelMessage(
-  args: CancelMessageInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleCancelMessage(args: CancelMessageInput, client: NzovuClient): Promise<string> {
   await client.messages.cancelMessage(args.queue_name, args.message_id, args.reason || '');
 
   return `✓ Message cancelled successfully
@@ -837,10 +818,7 @@ Message ID: ${args.message_id}${args.reason ? `\nReason: ${args.reason}` : ''}`;
 
 // Additional Schedule Handlers
 
-async function handleGetSchedule(
-  args: GetScheduleInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleGetSchedule(args: GetScheduleInput, client: NzovuClient): Promise<string> {
   const schedule = await client.schedules.getSchedule(args.schedule_id);
 
   if (!schedule) {
@@ -871,17 +849,14 @@ async function handleGetSchedule(
   return result;
 }
 
-async function handlePauseSchedule(
-  args: PauseScheduleInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handlePauseSchedule(args: PauseScheduleInput, client: NzovuClient): Promise<string> {
   await client.schedules.pauseSchedule(args.schedule_id);
   return `✓ Schedule '${args.schedule_id}' paused successfully`;
 }
 
 async function handleResumeSchedule(
   args: ResumeScheduleInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   await client.schedules.resumeSchedule(args.schedule_id);
   return `✓ Schedule '${args.schedule_id}' resumed successfully`;
@@ -889,7 +864,7 @@ async function handleResumeSchedule(
 
 async function handleGetScheduleHistory(
   args: GetScheduleHistoryInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const history = await client.schedules.getScheduleHistory(args.schedule_id, args.limit || 100);
 
@@ -930,7 +905,7 @@ async function handleGetScheduleHistory(
 
 async function handleGetDLQMessages(
   args: GetDLQMessagesInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const messages = await client.dlq.getDLQMessages(args.dlq_name, args.limit || 10);
 
@@ -964,7 +939,7 @@ async function handleGetDLQMessages(
 
 async function handleRequeueFromDLQ(
   args: RequeueFromDLQInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const messageIds = args.message_ids;
 
@@ -981,10 +956,7 @@ async function handleRequeueFromDLQ(
   return `📤 Requeue Results from DLQ '${args.dlq_name}'\n\n${results.join('\n')}${args.target_queue ? `\n\nTarget Queue: ${args.target_queue}` : ''}`;
 }
 
-async function handleDeleteFromDLQ(
-  args: DeleteFromDLQInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleDeleteFromDLQ(args: DeleteFromDLQInput, client: NzovuClient): Promise<string> {
   const messageIds = args.message_ids;
 
   const results = [];
@@ -1000,15 +972,12 @@ async function handleDeleteFromDLQ(
   return `🗑️  Delete Results from DLQ '${args.dlq_name}'\n\n${results.join('\n')}`;
 }
 
-async function handlePurgeDLQ(args: PurgeDLQInput, client: ChronoQueueClient): Promise<string> {
+async function handlePurgeDLQ(args: PurgeDLQInput, client: NzovuClient): Promise<string> {
   await client.dlq.purgeDLQ(args.dlq_name);
   return `✓ DLQ '${args.dlq_name}' purged successfully\n\nAll messages have been removed from the Dead Letter Queue.`;
 }
 
-async function handleGetDLQStats(
-  args: GetDLQStatsInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleGetDLQStats(args: GetDLQStatsInput, client: NzovuClient): Promise<string> {
   const stats = await client.dlq.getDLQStats(args.dlq_name);
 
   return `📊 DLQ Statistics: ${stats.name}\n\nMessage Count: ${stats.messageCount}\nCreated: ${stats.createdAt}\nLast Updated: ${stats.updatedAt}`;
@@ -1016,7 +985,7 @@ async function handleGetDLQStats(
 
 // Additional Schema Handlers
 
-async function handleGetSchema(args: GetSchemaInput, client: ChronoQueueClient): Promise<string> {
+async function handleGetSchema(args: GetSchemaInput, client: NzovuClient): Promise<string> {
   const schema = await client.schemas.getSchema(args.schema_id, args.version);
 
   if (!schema) {
@@ -1040,10 +1009,7 @@ ${(() => {
 })()}`;
 }
 
-async function handleListSchemas(
-  args: ListSchemasInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleListSchemas(args: ListSchemasInput, client: NzovuClient): Promise<string> {
   const schemas = await client.schemas.listSchemas({
     prefix: args.prefix,
     activeOnly: !args.include_all_versions,
@@ -1069,10 +1035,7 @@ async function handleListSchemas(
   return result;
 }
 
-async function handleDeleteSchema(
-  args: DeleteSchemaInput,
-  client: ChronoQueueClient
-): Promise<string> {
+async function handleDeleteSchema(args: DeleteSchemaInput, client: NzovuClient): Promise<string> {
   await client.schemas.deleteSchema(args.schema_id, args.version);
 
   return `✓ Schema deleted successfully
@@ -1082,7 +1045,7 @@ Schema ID: ${args.schema_id}${args.version ? `\nVersion: ${args.version}` : '\nA
 
 async function handleValidatePayload(
   args: ValidatePayloadInput,
-  client: ChronoQueueClient
+  client: NzovuClient
 ): Promise<string> {
   const result = await client.schemas.validatePayload(
     args.schema_id,

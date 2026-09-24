@@ -1,20 +1,20 @@
 # Trip Planner Worker
 
-A self-orchestrating trip planning system demonstrating ChronoQueue's advanced features including lease policies, retention policies, heartbeat mechanisms, and worker tracking.
+A self-orchestrating trip planning system demonstrating Nzovu's advanced features including lease policies, retention policies, heartbeat mechanisms, and worker tracking.
 
 ## Overview
 
 This example showcases a complete trip planning workflow where:
 
-- **Producer** posts trip planning requests to a ChronoQueue
+- **Producer** posts trip planning requests to a Nzovu
 - **Worker** processes requests asynchronously with proper lease management
-- **ChronoQueue** handles orchestration, retries, and message retention
+- **Nzovu** handles orchestration, retries, and message retention
 
 ## Architecture
 
 ```
 ┌─────────────┐         ┌──────────────┐         ┌─────────────┐
-│  Producer   │ ──────> │ ChronoQueue  │ ──────> │   Worker    │
+│  Producer   │ ──────> │ Nzovu  │ ──────> │   Worker    │
 │             │  Post   │              │  Get    │             │
 │ Trip Plans  │ Message │ Lease Policy │ Message │ Trip Planner│
 └─────────────┘         │ Retention    │         └─────────────┘
@@ -28,7 +28,7 @@ This example showcases a complete trip planning workflow where:
 - **producer.ts**: Posts trip planning requests with priorities
 - **worker.ts**: Processes requests with heartbeat support and statistics tracking
 
-## ChronoQueue Features Demonstrated
+## Nzovu Features Demonstrated
 
 ### 1. **Lease Policy**
 
@@ -94,17 +94,17 @@ pnpm build
 
 ## Prerequisites
 
-Make sure ChronoQueue server is running:
+Make sure Nzovu server is running:
 
 ```bash
-# Start ChronoQueue server
-chronoqueue-server --port 50051
+# Start Nzovu server
+nzovu-server --port 50051
 ```
 
 Or set custom server address:
 
 ```bash
-export CHRONOQUEUE_SERVER=localhost:50051
+export NZOVU_SERVER=localhost:9000
 ```
 
 ## Usage
@@ -121,7 +121,7 @@ pnpm run producer
 
 ```
 🚀 Starting Trip Planner Producer...
-📡 Connecting to ChronoQueue at localhost:50051
+📡 Connecting to Nzovu at localhost:9000
 
 ✅ Queue 'trip-planning-requests' ready
 
@@ -167,7 +167,7 @@ pnpm run worker
 
 ```
 🤖 Starting Trip Planner Worker...
-📡 Server: localhost:50051
+📡 Server: localhost:9000
 🆔 Worker ID: worker-12345
 📥 Queue: trip-planning-requests
 
@@ -253,13 +253,13 @@ This runs both producer and worker simultaneously using `npm-run-all`.
 
 ## Self-Improvement Workflow
 
-This project was built using ChronoQueue MCP to orchestrate development tasks. Here's how it works:
+This project was built using Nzovu MCP to orchestrate development tasks. Here's how it works:
 
 ### Development Task Queue
 
 ```typescript
 // Created queue: trip-planner-dev-tasks
-await mcp_chronoqueue_create_queue({
+await mcp_nzovu_create_queue({
   queueName: "trip-planner-dev-tasks",
   leasePolicy: {
     baseLease: "300s",
@@ -312,14 +312,14 @@ Consider adding these tasks to continue improving the system:
 ### Check Queue State
 
 ```bash
-# Using ChronoQueue CLI
-chronoqueue queue state trip-planning-requests
+# Using Nzovu CLI
+nzovu queue state trip-planning-requests
 ```
 
 ### View Dead Letter Queue
 
 ```bash
-chronoqueue queue dlq trip-planning-requests-dlq
+nzovu queue dlq trip-planning-requests-dlq
 ```
 
 ### Audit Retained Messages
@@ -335,7 +335,7 @@ Messages are retained for 2 days, allowing:
 
 ### Worker Not Processing
 
-- Verify ChronoQueue server is running
+- Verify Nzovu server is running
 - Check network connectivity: `telnet localhost 50051`
 - Ensure queue exists and has pending messages
 
@@ -357,4 +357,4 @@ MIT
 
 ---
 
-**Built with ChronoQueue** - Demonstrating self-orchestrating workflows with lease policies, heartbeats, and retention for audit compliance.
+**Built with Nzovu** - Demonstrating self-orchestrating workflows with lease policies, heartbeats, and retention for audit compliance.

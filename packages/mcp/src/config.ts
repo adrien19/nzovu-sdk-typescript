@@ -1,11 +1,11 @@
 /**
- * Configuration management for ChronoQueue MCP Server
+ * Configuration management for Nzovu MCP Server
  */
 
-import { parseDuration as clientParseDuration, durationToMs } from '@chronoqueue/client';
+import { parseDuration as clientParseDuration, durationToMs } from '@nzovu/client';
 
 export interface ServerConfig {
-  chronoqueueAddress: string;
+  nzovuAddress: string;
   insecure: boolean;
   certPath?: string;
   keyPath?: string;
@@ -18,12 +18,12 @@ export interface ServerConfig {
  */
 export function loadConfig(): ServerConfig {
   return {
-    chronoqueueAddress: process.env.CHRONOQUEUE_ADDRESS || 'localhost:9000',
-    insecure: process.env.CHRONOQUEUE_INSECURE !== 'false',
-    certPath: process.env.CHRONOQUEUE_CERT_PATH,
-    keyPath: process.env.CHRONOQUEUE_KEY_PATH,
-    caPath: process.env.CHRONOQUEUE_CA_PATH,
-    timeout: process.env.CHRONOQUEUE_TIMEOUT || '30s',
+    nzovuAddress: process.env.NZOVU_ADDRESS || 'localhost:9000',
+    insecure: process.env.NZOVU_INSECURE !== 'false',
+    certPath: process.env.NZOVU_CERT_PATH,
+    keyPath: process.env.NZOVU_KEY_PATH,
+    caPath: process.env.NZOVU_CA_PATH,
+    timeout: process.env.NZOVU_TIMEOUT || '30s',
   };
 }
 

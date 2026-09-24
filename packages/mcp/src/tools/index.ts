@@ -1,5 +1,5 @@
 /**
- * Tool registry - defines all available MCP tools for ChronoQueue
+ * Tool registry - defines all available MCP tools for Nzovu
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
@@ -7,7 +7,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
 // Queue Management Tools
 export const createQueueTool: Tool = {
   name: 'create_queue',
-  description: 'Create a new ChronoQueue queue with specified configuration',
+  description: 'Create a new Nzovu queue with specified configuration',
   inputSchema: {
     type: 'object',
     properties: {

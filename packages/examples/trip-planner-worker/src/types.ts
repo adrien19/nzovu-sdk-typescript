@@ -1,6 +1,6 @@
 /**
  * Type definitions for Trip Planner Worker
- * Demonstrates ChronoQueue-based trip planning orchestration
+ * Demonstrates Nzovu-based trip planning orchestration
  */
 
 /**

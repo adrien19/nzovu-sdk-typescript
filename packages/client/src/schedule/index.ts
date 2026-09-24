@@ -1,7 +1,4 @@
-import {
-  Schedule as ProtoSchedule,
-  QueueServiceTypes,
-} from "@chronoqueue/proto";
+import { Schedule as ProtoSchedule, QueueServiceTypes } from "@nzovu/proto";
 import { Connection } from "../connection";
 import { handleGrpcError, validateRequired } from "../utils/errors";
 
@@ -75,6 +72,8 @@ export class ScheduleClient {
       return new Promise<ProtoSchedule.Schedule[]>((resolve, reject) => {
         const request: QueueServiceTypes.ListSchedulesRequest = {
           prefix: prefix || "",
+          pageSize: 0,
+          pageToken: "",
         };
 
         client.listSchedules(request, (error, response) => {
@@ -182,7 +181,8 @@ export class ScheduleClient {
         (resolve, reject) => {
           const request: QueueServiceTypes.GetScheduleHistoryRequest = {
             scheduleId,
-            limit: (limit || 100).toString(),
+            pageSize: limit ?? 100,
+            pageToken: "",
           };
 
           client.getScheduleHistory(request, (error, response) => {

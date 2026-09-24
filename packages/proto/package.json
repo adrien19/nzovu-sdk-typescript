@@ -1,7 +1,7 @@
 {
-  "name": "@chronoqueue/proto",
-  "version": "0.1.0",
-  "description": "ChronoQueue SDK compiled protobuf definitions",
+  "name": "@nzovu/proto",
+  "version": "0.0.1-dev.0",
+  "description": "Nzovu SDK compiled protobuf definitions",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
@@ -24,7 +24,7 @@
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf lib src/generated",
-    "gen": "tsx ./scripts/compile-proto.ts",
+    "gen": "node ../../scripts/proto.mjs generate",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -32,9 +32,9 @@
     "prepublishOnly": "node ../../scripts/block-release.mjs"
   },
   "keywords": [
-    "chronoqueue"
+    "nzovu"
   ],
-  "author": "ChronoQueue Team",
+  "author": "Nzovu Team",
   "license": "MIT",
   "dependencies": {
     "@bufbuild/protobuf": "^2.10.1",
@@ -46,21 +46,21 @@
     "@types/node": "^20.10.8",
     "glob": "^10.3.10",
     "jest": "^29.7.0",
-    "protoc": "^33.1.0",
+    "protoc": "33.1.0",
     "ts-jest": "^29.1.0",
-    "ts-proto": "^2.8.3",
+    "ts-proto": "2.8.3",
     "tsx": "^4.7.0",
     "typescript": "^5.6.3"
   },
   "bugs": {
-    "url": "https://github.com/adrien19/chronoqueue-typescript-sdk/issues"
+    "url": "https://github.com/adrien19/nzovu-sdk-typescript/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/adrien19/chronoqueue-typescript-sdk.git",
+    "url": "git+https://github.com/adrien19/nzovu-sdk-typescript.git",
     "directory": "packages/proto"
   },
-  "homepage": "https://github.com/adrien19/chronoqueue-typescript-sdk/tree/main/packages/proto",
+  "homepage": "https://github.com/adrien19/nzovu-sdk-typescript/tree/main/packages/proto",
   "publishConfig": {
     "access": "public"
   },

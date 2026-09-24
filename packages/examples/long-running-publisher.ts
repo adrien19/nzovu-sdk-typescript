@@ -6,15 +6,15 @@
  */
 
 import {
-  ChronoQueueClient,
+  NzovuClient,
   LeasePolicy,
   Message,
   MessageRetentionPolicy_Mode,
   Queue,
-} from "@chronoqueue/client";
+} from "@nzovu/client";
 
 async function main() {
-  const client = new ChronoQueueClient({
+  const client = new NzovuClient({
     connection: { address: "host.docker.internal:9000" },
   });
   await client.connect();

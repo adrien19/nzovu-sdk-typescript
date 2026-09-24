@@ -1,5 +1,5 @@
 /**
- * Simple logger for ChronoQueue client
+ * Simple logger for Nzovu client
  * Allows users to control logging behavior
  */
 
@@ -26,25 +26,25 @@ export class ConsoleLogger implements Logger {
 
   debug(message: string, ...args: any[]): void {
     if (this.level <= LogLevel.DEBUG) {
-      console.debug(`[ChronoQueue DEBUG] ${message}`, ...args);
+      console.debug(`[Nzovu DEBUG] ${message}`, ...args);
     }
   }
 
   info(message: string, ...args: any[]): void {
     if (this.level <= LogLevel.INFO) {
-      console.info(`[ChronoQueue INFO] ${message}`, ...args);
+      console.info(`[Nzovu INFO] ${message}`, ...args);
     }
   }
 
   warn(message: string, ...args: any[]): void {
     if (this.level <= LogLevel.WARN) {
-      console.warn(`[ChronoQueue WARN] ${message}`, ...args);
+      console.warn(`[Nzovu WARN] ${message}`, ...args);
     }
   }
 
   error(message: string, ...args: any[]): void {
     if (this.level <= LogLevel.ERROR) {
-      console.error(`[ChronoQueue ERROR] ${message}`, ...args);
+      console.error(`[Nzovu ERROR] ${message}`, ...args);
     }
   }
 }

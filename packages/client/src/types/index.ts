@@ -36,10 +36,10 @@ export interface HealthCheckOptions {
 }
 
 /**
- * Connection options for establishing a gRPC connection to ChronoQueue server
+ * Connection options for establishing a gRPC connection to Nzovu server
  */
 export interface ConnectionOptions {
-  /** Server address (e.g., 'localhost:50051') */
+  /** Server address (e.g., 'localhost:9000') */
   address: string;
 
   /** gRPC credentials (default: insecure) */
@@ -84,7 +84,7 @@ export interface ClientConfig {
 }
 
 /**
- * ChronoQueue error codes
+ * Nzovu error codes
  */
 export enum ErrorCode {
   // Client errors
@@ -105,16 +105,16 @@ export enum ErrorCode {
 }
 
 /**
- * ChronoQueue client error
+ * Nzovu client error
  */
-export class ChronoQueueError extends Error {
+export class NzovuError extends Error {
   constructor(
     public code: ErrorCode,
     message: string,
     public cause?: Error,
   ) {
     super(message);
-    this.name = "ChronoQueueError";
-    Object.setPrototypeOf(this, ChronoQueueError.prototype);
+    this.name = "NzovuError";
+    Object.setPrototypeOf(this, NzovuError.prototype);
   }
 }

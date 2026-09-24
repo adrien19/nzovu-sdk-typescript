@@ -27,7 +27,7 @@ describe("Logger", () => {
         const logger = new ConsoleLogger(LogLevel.DEBUG);
         logger.debug("debug message", "arg1", "arg2");
         expect(consoleSpy.debug).toHaveBeenCalledWith(
-          "[ChronoQueue DEBUG] debug message",
+          "[Nzovu DEBUG] debug message",
           "arg1",
           "arg2",
         );
@@ -37,7 +37,7 @@ describe("Logger", () => {
         const logger = new ConsoleLogger(LogLevel.DEBUG);
         logger.info("info message");
         expect(consoleSpy.info).toHaveBeenCalledWith(
-          "[ChronoQueue INFO] info message",
+          "[Nzovu INFO] info message",
         );
       });
 
@@ -45,7 +45,7 @@ describe("Logger", () => {
         const logger = new ConsoleLogger(LogLevel.DEBUG);
         logger.warn("warn message");
         expect(consoleSpy.warn).toHaveBeenCalledWith(
-          "[ChronoQueue WARN] warn message",
+          "[Nzovu WARN] warn message",
         );
       });
 
@@ -53,7 +53,7 @@ describe("Logger", () => {
         const logger = new ConsoleLogger(LogLevel.DEBUG);
         logger.error("error message");
         expect(consoleSpy.error).toHaveBeenCalledWith(
-          "[ChronoQueue ERROR] error message",
+          "[Nzovu ERROR] error message",
         );
       });
     });

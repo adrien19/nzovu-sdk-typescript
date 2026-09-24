@@ -1,7 +1,7 @@
-import { QueueService } from "@chronoqueue/proto";
+import { QueueService } from "@nzovu/proto";
 import * as grpc from "@grpc/grpc-js";
 import {
-  ChronoQueueError,
+  NzovuError,
   ConnectionOptions,
   ErrorCode,
   HealthCheckOptions,
@@ -84,7 +84,7 @@ export class Connection {
   }
 
   /**
-   * Connect to ChronoQueue server
+   * Connect to Nzovu server
    */
   async connect(): Promise<void> {
     if (this.state === ConnectionState.CONNECTED) {
@@ -94,7 +94,7 @@ export class Connection {
     this.state = ConnectionState.CONNECTING;
 
     try {
-      // Create service client (ChronoQueue uses a single unified QueueService)
+      // Create service client (Nzovu uses a single unified QueueService)
       this.queueServiceClient = new QueueService.QueueServiceClient(
         this.address,
         this.credentials,
@@ -114,7 +114,7 @@ export class Connection {
       }
     } catch (error) {
       this.state = ConnectionState.DISCONNECTED;
-      throw new ChronoQueueError(
+      throw new NzovuError(
         ErrorCode.CONNECTION_FAILED,
         `Failed to connect to ${this.address}: ${(error as Error).message}`,
         error as Error,
@@ -132,7 +132,7 @@ export class Connection {
       client.waitForReady(deadline, (error) => {
         if (error) {
           reject(
-            new ChronoQueueError(
+            new NzovuError(
               ErrorCode.CONNECTION_TIMEOUT,
               `Connection timeout after ${this.timeout}ms`,
               error,
@@ -146,7 +146,7 @@ export class Connection {
   }
 
   /**
-   * Disconnect from ChronoQueue server
+   * Disconnect from Nzovu server
    */
   async disconnect(): Promise<void> {
     this.stopHealthCheck();
@@ -341,9 +341,9 @@ export class Connection {
    */
   private ensureConnected(): void {
     if (this.state !== ConnectionState.CONNECTED) {
-      throw new ChronoQueueError(
+      throw new NzovuError(
         ErrorCode.CONNECTION_FAILED,
-        "Not connected to ChronoQueue server. Call connect() first.",
+        "Not connected to Nzovu server. Call connect() first.",
       );
     }
   }

@@ -1,5 +1,5 @@
 import { Connection, ConnectionState } from "../src/connection";
-import { ChronoQueueError } from "../src/types";
+import { NzovuError } from "../src/types";
 
 // Mock the grpc-js module
 jest.mock("@grpc/grpc-js", () => {
@@ -14,7 +14,7 @@ jest.mock("@grpc/grpc-js", () => {
 });
 
 // Mock the proto module
-jest.mock("@chronoqueue/proto", () => ({
+jest.mock("@nzovu/proto", () => ({
   QueueService: {
     QueueServiceClient: jest.fn().mockImplementation(() => ({
       waitForReady: jest.fn((deadline, cb) => cb(null)),
@@ -40,13 +40,13 @@ describe("Connection", () => {
 
   describe("constructor", () => {
     it("should create connection with minimal options", () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       expect(connection.isConnected()).toBe(false);
     });
 
     it("should create connection with custom timeout", () => {
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         timeout: 10000,
       });
       expect(connection).toBeDefined();
@@ -54,7 +54,7 @@ describe("Connection", () => {
 
     it("should create connection with retry options", () => {
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         retry: {
           maxRetries: 5,
           baseDelay: 200,
@@ -72,7 +72,7 @@ describe("Connection", () => {
     it("should create connection with health check options", () => {
       const onHealthChange = jest.fn();
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         healthCheck: {
           enabled: true,
           intervalMs: 10000,
@@ -86,20 +86,20 @@ describe("Connection", () => {
 
   describe("connect", () => {
     it("should connect successfully", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.connect();
       expect(connection.isConnected()).toBe(true);
     });
 
     it("should not reconnect if already connected", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.connect();
       await connection.connect();
       expect(connection.isConnected()).toBe(true);
     });
 
     it("should throw on connection timeout", async () => {
-      const { QueueService } = require("@chronoqueue/proto");
+      const { QueueService } = require("@nzovu/proto");
       QueueService.QueueServiceClient.mockImplementationOnce(() => ({
         waitForReady: jest.fn((deadline, cb) =>
           cb(new Error("Connection timeout")),
@@ -108,17 +108,17 @@ describe("Connection", () => {
       }));
 
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         timeout: 1000,
       });
 
-      await expect(connection.connect()).rejects.toThrow(ChronoQueueError);
+      await expect(connection.connect()).rejects.toThrow(NzovuError);
     });
 
     it("should start health check when enabled", async () => {
       const onHealthChange = jest.fn();
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         healthCheck: {
           enabled: true,
           intervalMs: 1000,
@@ -134,14 +134,14 @@ describe("Connection", () => {
 
   describe("disconnect", () => {
     it("should disconnect successfully", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.connect();
       await connection.disconnect();
       expect(connection.isConnected()).toBe(false);
     });
 
     it("should handle disconnect when already disconnected", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.disconnect();
       expect(connection.isConnected()).toBe(false);
     });
@@ -149,28 +149,28 @@ describe("Connection", () => {
 
   describe("getQueueServiceClient", () => {
     it("should return client when connected", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.connect();
       const client = connection.getQueueServiceClient();
       expect(client).toBeDefined();
     });
 
     it("should throw when not connected", () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       expect(() => connection.getQueueServiceClient()).toThrow(
-        "Not connected to ChronoQueue server",
+        "Not connected to Nzovu server",
       );
     });
   });
 
   describe("getState", () => {
     it("should return DISCONNECTED initially", () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       expect(connection.getState()).toBe(ConnectionState.DISCONNECTED);
     });
 
     it("should return CONNECTED after connect", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.connect();
       expect(connection.getState()).toBe(ConnectionState.CONNECTED);
     });
@@ -178,7 +178,7 @@ describe("Connection", () => {
 
   describe("checkHealth", () => {
     it("should return healthy when connected", async () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       await connection.connect();
       const health = connection.checkHealth();
       expect(health.healthy).toBe(true);
@@ -186,7 +186,7 @@ describe("Connection", () => {
     });
 
     it("should return unhealthy when disconnected", () => {
-      connection = new Connection({ address: "localhost:50051" });
+      connection = new Connection({ address: "localhost:9000" });
       const health = connection.checkHealth();
       expect(health.healthy).toBe(false);
       expect(health.state).toBe(ConnectionState.DISCONNECTED);
@@ -196,7 +196,7 @@ describe("Connection", () => {
   describe("retry configuration", () => {
     it("should return retry config", () => {
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         retry: {
           maxRetries: 5,
           baseDelay: 100,
@@ -213,13 +213,13 @@ describe("Connection", () => {
 
     it("should report retry enabled status", () => {
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         retry: { enabled: true },
       });
       expect(connection.isRetryEnabled()).toBe(true);
 
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         retry: { enabled: false },
       });
       expect(connection.isRetryEnabled()).toBe(false);
@@ -229,7 +229,7 @@ describe("Connection", () => {
   describe("withRetry", () => {
     it("should execute operation when retry is disabled", async () => {
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         retry: { enabled: false },
       });
 
@@ -241,7 +241,7 @@ describe("Connection", () => {
 
     it("should use retry logic when enabled", async () => {
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         retry: {
           enabled: true,
           maxRetries: 2,
@@ -258,7 +258,7 @@ describe("Connection", () => {
   describe("health check", () => {
     it("should detect unhealthy state", async () => {
       const onHealthChange = jest.fn();
-      const { QueueService } = require("@chronoqueue/proto");
+      const { QueueService } = require("@nzovu/proto");
 
       let connectivityState = 2; // READY
       QueueService.QueueServiceClient.mockImplementation(() => ({
@@ -270,7 +270,7 @@ describe("Connection", () => {
       }));
 
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         healthCheck: {
           enabled: true,
           intervalMs: 1000,
@@ -292,7 +292,7 @@ describe("Connection", () => {
 
     it("should detect recovery", async () => {
       const onHealthChange = jest.fn();
-      const { QueueService } = require("@chronoqueue/proto");
+      const { QueueService } = require("@nzovu/proto");
 
       let connectivityState = 2; // READY
       QueueService.QueueServiceClient.mockImplementation(() => ({
@@ -304,7 +304,7 @@ describe("Connection", () => {
       }));
 
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         healthCheck: {
           enabled: true,
           intervalMs: 1000,
@@ -334,7 +334,7 @@ describe("Connection", () => {
   describe("auto reconnect", () => {
     it("should attempt reconnect on unhealthy state when enabled", async () => {
       const onHealthChange = jest.fn();
-      const { QueueService } = require("@chronoqueue/proto");
+      const { QueueService } = require("@nzovu/proto");
 
       let connectivityState = 2;
       let clientInstance = 0;
@@ -350,7 +350,7 @@ describe("Connection", () => {
       });
 
       connection = new Connection({
-        address: "localhost:50051",
+        address: "localhost:9000",
         healthCheck: {
           enabled: true,
           intervalMs: 1000,
