@@ -323,3 +323,39 @@ it("uses TLS by default, honors custom CA, and authenticates mTLS", async () => 
     rmSync(directory, { recursive: true, force: true });
   }
 }, 15000);
+
+it("isolates cancellation scopes for concurrent SDK operations", async () => {
+  let complete: any;
+  let ready!: () => void;
+  const arrived = new Promise<void>((resolve) => {
+    ready = resolve;
+  });
+  let count = 0;
+  const c = await connect(
+    await serve({
+      getSchema: (call: any, cb: any) => {
+        if (call.request.schemaId === "keep") complete = cb;
+        if (++count === 2) ready();
+      },
+    }),
+  );
+  const controller = new AbortController();
+  const stop = c.runWithOptions({ signal: controller.signal }, () =>
+    c.invoke(
+      "getSchema",
+      R.GetSchemaRequest.fromPartial({ schemaId: "cancel" }),
+    ),
+  );
+  const kept = c.invoke(
+    "getSchema",
+    R.GetSchemaRequest.fromPartial({ schemaId: "keep" }),
+  );
+  const rejected = expect(stop).rejects.toMatchObject({
+    code: ErrorCode.CANCELLED,
+  });
+  await arrived;
+  controller.abort();
+  await rejected;
+  complete(null, {});
+  await expect(kept).resolves.toBeDefined();
+});

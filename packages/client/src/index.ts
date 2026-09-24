@@ -45,6 +45,7 @@ export {
   Message,
   Queue,
   QueueServiceTypes,
+  QueueService,
   Schedule,
   Schema,
 } from "@nzovu/proto";

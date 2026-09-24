@@ -1,454 +1,123 @@
-# Nzovu MCP Server
+# @nzovu/mcp-server
 
-Integrate Nzovu with AI assistants via the Model Context Protocol (MCP).
+Nzovu MCP stdio server. Private development package, version `0.0.1-dev.0`.
+Build locally from the monorepo root with `make build-all`; no package publication
+or installation from npm is available in this development workflow.
 
-## What is this?
-
-The Nzovu MCP Server exposes Nzovu's task queue operations as AI-accessible tools through the Model Context Protocol. This allows AI assistants like Claude to:
-
-- Create and manage task queues
-- Post and retrieve messages
-- Monitor queue states and statistics
-- Create scheduled tasks
-- Build distributed workflows
-
-## Quick Start
-
-### Installation
-
-```bash
-# From npm (once published)
-npm install -g @nzovu/mcp-server
-
-# Or run directly with npx
-npx @nzovu/mcp-server
+```sh
+NZOVU_ADDRESS=localhost:9000 NZOVU_INSECURE=true node packages/mcp/dist/index.js
 ```
 
-### Local Development
-
-```bash
-cd mcp
-npm install
-npm run build
-npm start
-```
-
-### Claude Desktop Configuration
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%/Claude/claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "nzovu": {
-      "command": "npx",
-      "args": ["-y", "@nzovu/mcp-server"],
-      "env": {
-        "NZOVU_ADDRESS": "localhost:9000",
-        "NZOVU_INSECURE": "true"
-      }
-    }
-  }
-}
-```
-
-### VS Code with GitHub Copilot
-
-Add to `.vscode/mcp.json` in your workspace:
-
-```json
-{
-  "github.copilot.chat.mcp": {
-    "servers": {
-      "nzovu": {
-        "command": "node",
-        "args": ["${workspaceFolder}/mcp/dist/index.js"],
-        "env": {
-          "NZOVU_ADDRESS": "localhost:9000",
-          "NZOVU_INSECURE": "true"
-        }
-      }
-    }
-  }
-}
-```
-
-**📖 [Complete VS Code Setup Guide](./VSCODE_SETUP.md)**
-
-### Cursor IDE Configuration
-
-Add to `.cursor/mcp.json` in your workspace:
-
-```json
-{
-  "mcpServers": {
-    "nzovu": {
-      "command": "node",
-      "args": ["./dist/index.js"],
-      "cwd": "${workspaceFolder}/mcp",
-      "env": {
-        "NZOVU_ADDRESS": "localhost:9000"
-      }
-    }
-  }
-}
-```
-
-## Available Tools
-
-The MCP server exposes **13 tools** for interacting with Nzovu:
-
-### Queue Management (4 tools)
-
-#### `create_queue`
-
-Create a new queue with configuration options.
-
-```
-Arguments:
-- queue_name (required): Queue identifier
-- queue_type: "simple" or "exclusive" (default: simple)
-- lease_duration: Message lease time (e.g., "30s", "5m")
-- max_attempts: Max retries before DLQ (default: 3)
-- auto_create_dlq: Auto-create dead letter queue
-- dlq_name: Custom DLQ name
-```
-
-#### `delete_queue`
-
-Delete an existing queue.
-
-```
-Arguments:
-- queue_name (required): Queue to delete
-```
-
-#### `list_queues`
-
-List all queues with their configurations.
-
-#### `get_queue_state`
-
-Get real-time statistics for a queue.
-
-```
-Arguments:
-- queue_name (required): Queue to inspect
-```
-
-### Message Operations (5 tools)
-
-#### `post_message`
-
-Post a message to a queue.
-
-```
-Arguments:
-- queue_name (required): Target queue
-- message_id (required): Unique identifier
-- payload (required): JSON object
-- priority: 1-10 (default: 5)
-- lease_duration: Override default lease
-- schema_id: Schema ID for validation (e.g., "user.profile.v1")
-- schema_version: Schema version number for validation
-```
-
-#### `get_next_message`
-
-Retrieve next message for processing (leases the message).
-
-```
-Arguments:
-- queue_name (required): Queue to consume from
-```
-
-#### `peek_messages`
-
-Preview messages without consuming them.
-
-```
-Arguments:
-- queue_name (required): Queue to peek at
-- limit: Number of messages (default: 10)
-```
-
-#### `acknowledge_message`
-
-Acknowledge message processing completion.
-
-```
-Arguments:
-- queue_name (required)
-- message_id (required)
-- status (required): "completed" or "errored"
-- stream_entry_id (required): From get_next_message
-```
-
-#### `renew_message_lease`
-
-Extend lease time for long-running processing.
-
-```
-Arguments:
-- queue_name (required)
-- message_id (required)
-- stream_entry_id (required)
-- lease_duration: New lease time
-```
-
-### Scheduling Tools (3 tools)
-
-#### `create_schedule`
-
-Create automated message posting schedule.
-
-```
-Arguments:
-- schedule_id (required): Unique identifier
-- queue_name (required): Target queue
-- schedule_type (required): "cron" or "calendar"
-- payload (required): Message to post
-- cron_expression: For cron schedules (e.g., "*/5 * * * *")
-- calendar_type: For calendar schedules (once/weekly/daily/business_days)
-- times_of_day: Array of times (e.g., ["09:00", "17:00"])
-- days_of_week: Array of days (1=Mon, 7=Sun)
-- priority: Message priority (1-10)
-- enabled: Active status (default: true)
-```
-
-#### `list_schedules`
-
-List all configured schedules.
-
-#### `delete_schedule`
-
-Delete a schedule.
-
-```
-Arguments:
-- schedule_id (required): Schedule to delete
-```
-
-### Schema Management (1 tool)
-
-#### `register_schema`
-
-Register a JSON schema for message validation.
-
-```
-Arguments:
-- schema_id (required): Unique schema identifier (e.g., "user.profile.v1")
-- name (required): Human-readable schema name
-- content (required): JSON Schema content as a JSON string
-- description: Schema description
-- content_type: Schema type (default: "json-schema")
-```
+The executable name is `nzovu-mcp`. stdout carries MCP JSON-RPC only. Diagnostics
+use stderr. All 31 service operations are registered from one canonical registry;
+`tools/list` supplies the exact schemas, descriptions and annotations.
 
 ## Configuration
 
-Environment variables:
+| Environment variable       | Meaning                                            | Default          |
+| -------------------------- | -------------------------------------------------- | ---------------- |
+| `NZOVU_ADDRESS`            | gRPC address                                       | `localhost:9000` |
+| `NZOVU_INSECURE`           | Explicit plaintext; only `true` / `false` accepted | `false` (TLS)    |
+| `NZOVU_API_KEY`            | API key sent in gRPC metadata                      | absent           |
+| `NZOVU_CA_PATH`            | PEM CA file; works without a client certificate    | system roots     |
+| `NZOVU_CERT_PATH`          | PEM client certificate for mTLS                    | absent           |
+| `NZOVU_KEY_PATH`           | PEM client private key, required with certificate  | absent           |
+| `NZOVU_TIMEOUT`            | Connection and RPC timeout; whole milliseconds     | `30s`            |
+| `NZOVU_MAX_MANAGED_CLAIMS` | Outstanding acquired claims per process            | `1000`           |
 
-| Variable          | Description                | Default          |
-| ----------------- | -------------------------- | ---------------- |
-| `NZOVU_ADDRESS`   | Nzovu server address       | `localhost:9000` |
-| `NZOVU_INSECURE`  | Use insecure connection    | `true`           |
-| `NZOVU_CERT_PATH` | Path to client certificate | -                |
-| `NZOVU_KEY_PATH`  | Path to client key         | -                |
-| `NZOVU_CA_PATH`   | Path to CA certificate     | -                |
-| `NZOVU_TIMEOUT`   | Operation timeout          | `30s`            |
+Certificate/key must be paired. TLS files cannot be combined with plaintext.
+Invalid, zero, fractional-millisecond or overflowing timeouts fail startup.
+Keep API keys outside committed configuration. Authentication errors return
+`UNAUTHENTICATED` distinctly; the configured key is redacted from tool errors.
 
-## Usage Examples
+## Tool inputs and results
 
-### Example 1: Task Queue for AI Agents
+Inputs use **camelCase protobuf field names** with strict schemas; unknown fields
+are rejected. Nested messages, queue metadata and calendar structures follow the
+pinned Nzovu API. There are no old `queue_name`, `limit`, or formatted-duration
+aliases. Read the advertised `tools/list` schema for every field.
 
-```
-You: Create a queue called "agent-tasks" for coordinating AI agents
+- Priorities are decimal strings `"0"` through `"4"`; default `"0"`.
+- Int64 values remain strings. Duration and timestamp values are
+  `{ "seconds": "30", "nanos": 1 }`; timestamps retain nanoseconds.
+- Headers are ordered `{ "key": "x-trace", "value": "AP8=" }` entries, where
+  `value` is canonical base64. Duplicate keys are preserved. Header limits and
+  reserved prefixes match the server.
+- Payload data is a JSON object. `validate_payload.payload` accepts any JSON value,
+  including strings, null, false and zero, and serializes it exactly once.
+- Posting rejects client-supplied runtime state. Bulk inputs permit encodable
+  invalid IDs/priorities so BEST_EFFORT can return server per-item failures.
+- Collection tools fetch **one page**, accepting `pageSize` (0 defaults to 100;
+  maximum 1000) and opaque `pageToken`. Results retain `nextPageToken` and counts.
+- Responses include both `structuredContent` and equivalent JSON text. Complete
+  protobuf fields are preserved; optional absent fields stay absent. Bytes use
+  base64, enums use numeric values, and timestamps use seconds/nanos objects.
+- Failures set `isError: true` and return an error code, gRPC code when available,
+  and details. Calendar/payload validation returning `valid: false` remains a
+  successful RPC containing all validation issues.
 
-Claude uses: create_queue
-Result: Queue created with default settings
+Example arguments for `post_message`:
 
-You: Post a task to analyze a document
-
-Claude uses: post_message with:
+```json
 {
-  "queue_name": "agent-tasks",
-  "message_id": "task-001",
-  "payload": {
-    "type": "analyze_document",
-    "document_url": "https://example.com/doc.pdf",
-    "analysis_type": "summary"
-  },
-  "priority": 7
-}
-
-You: Check queue status
-
-Claude uses: get_queue_state
-Result: Shows 1 pending message
-```
-
-### Example 2: Scheduled Reports
-
-```
-You: Create a daily report schedule at 9 AM
-
-Claude uses: create_schedule with:
-{
-  "schedule_id": "daily-report",
-  "queue_name": "reports",
-  "schedule_type": "calendar",
-  "calendar_type": "daily",
-  "times_of_day": ["09:00"],
-  "payload": {
-    "report_type": "daily_summary",
-    "recipients": ["team@example.com"]
+  "queueName": "tasks",
+  "message": {
+    "messageId": "task-1",
+    "metadata": {
+      "priority": "2",
+      "payload": { "data": { "task": "report" }, "contentType": "application/json" },
+      "headers": [{ "key": "x-trace", "value": "AP8=" }],
+      "leasePolicy": { "maxRenewals": 0 }
+    }
   }
 }
 ```
 
-### Example 3: Message Processing Workflow
+For `get_next_message`, provide `{ "queueName": "tasks" }`. Save its `workerId`
+and `attemptId`; pass both unchanged with queue/message IDs to
+`send_message_heartbeat`, `renew_message_lease` and `acknowledge_message`.
+ACK state is `3` (COMPLETED) or `5` (ERRORED). MCP does not start automatic
+heartbeats: workers explicitly invoke heartbeat/renewal while processing.
 
-```
-You: Get the next task from agent-tasks
+## Available tools
 
-Claude uses: get_next_message
-Result: Returns message with stream_entry_id
+| Resource | Tools                                                                                                                                                               |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Queue    | `create_queue`, `delete_queue`, `get_queue_state`, `list_queues`                                                                                                    |
+| Message  | `post_message`, `post_messages_bulk`, `get_next_message`, `acknowledge_message`, `cancel_message`, `send_message_heartbeat`, `renew_message_lease`, `peek_messages` |
+| Schedule | `create_schedule`, `get_schedule`, `delete_schedule`, `pause_schedule`, `resume_schedule`, `list_schedules`, `get_schedule_history`                                 |
+| Calendar | `validate_calendar_schedule`, `preview_calendar_schedule`                                                                                                           |
+| DLQ      | `get_dlq_messages`, `requeue_from_dlq`, `delete_from_dlq`, `purge_dlq`, `get_dlq_stats`                                                                             |
+| Schema   | `register_schema`, `get_schema`, `delete_schema`, `list_schemas`, `validate_payload`                                                                                |
 
-You: The task is complete
+Schema lists summarize families, including total count and version count.
+Deactivation returns `versionsDeleted`. DLQ requeue requires `targetQueue`.
+Bulk mode `0` is ALL_OR_NOTHING; `1` is BEST_EFFORT. All per-item results survive.
+Schedule history includes durable executions and immutable message snapshots.
+Calendar preview returns exact execution times, timezone, start and count.
 
-Claude uses: acknowledge_message with status "completed"
-```
+Destructive operations are annotated in tool metadata. Read-only operations are
+marked accordingly; acquisition, heartbeat and renewal are state mutations.
+Only read-only UNAVAILABLE RPCs retry, within one deadline budget. Mutations are
+never automatically replayed.
 
-## Development
+## Lifecycle and local validation
 
-### Project Structure
+MCP cancellation propagates to the underlying RPC and retry wait. EOF, transport
+closure, SIGINT and SIGTERM disconnect the SDK, cancel calls, clear claims and
+remove listeners. `createMCPServer()` can be embedded; await `server.close()`.
+Use `signalHandlers: false` when the embedding application owns signal handling.
 
-```
-mcp/
-├── src/
-│   ├── index.ts              # Entry point
-│   ├── server.ts             # MCP server setup
-│   ├── config.ts             # Configuration management
-│   ├── nzovu-client.ts # gRPC client wrapper
-│   ├── types/
-│   │   └── nzovu.ts    # Type definitions
-│   └── tools/
-│       ├── index.ts          # Tool registry
-│       └── handlers.ts       # Tool implementations
-├── examples/
-│   ├── claude-desktop-config.json
-│   └── cursor-mcp-config.json
-└── package.json
-```
+Run from the repository root:
 
-### Build & Test
-
-```bash
-# Install dependencies
-npm install
-
-# Build TypeScript
-npm run build
-
-# Start server
-npm start
-
-# Development mode (watch)
-npm run dev
-
-# Lint code
-npm run lint
-
-# Format code
-npm run format
-
-# Run tests
-npm test
-
-# Run tests with coverage
-npm run test:coverage
+```sh
+make test-mcp
+make ci
 ```
 
-### Testing
+Tests use the actual MCP client/server registration and built stdio executable,
+plus local gRPC fixtures for every RPC, TLS/mTLS, authentication errors, deadlines,
+cancellation and shutdown. This validates protocol behavior; live SQLite/PostgreSQL
+server validation remains a separate development gate.
 
-The MCP server includes comprehensive unit tests:
-
-- **46 tests** covering all tools and functionality
-- **Tool definitions** - Validates all 13 tools are properly registered
-- **Tool handlers** - Tests queue, message, schedule, and schema operations
-- **Client functionality** - Tests gRPC client and protobuf conversions
-
-Run tests with:
-
-```bash
-npm test              # Run tests in watch mode
-npm test -- --run     # Run tests once
-npm run test:coverage # Run with coverage report
-```
-
-## Phase Status
-
-- ✅ Phase 1: Project structure setup
-- ✅ Phase 2: Core implementation
-  - MCP server with SDK integration
-  - gRPC client wrapper
-  - TypeScript type definitions
-  - Configuration management
-- ✅ Phase 3: Tool implementation (13/13 tools complete)
-  - ✅ Queue management tools (4)
-  - ✅ Message operation tools (5)
-  - ✅ Scheduling tools (3)
-  - ✅ Schema management tools (1)
-- ✅ Phase 4: Testing & validation
-  - ✅ Unit tests (46 tests passing)
-  - ✅ Integration tests
-  - ✅ Tool definitions validated
-- ✅ Phase 5: Documentation & examples
-- ⏳ Phase 6: npm publishing
-
-## Troubleshooting
-
-### Connection Issues
-
-**Problem**: Cannot connect to Nzovu server
-
-**Solution**:
-
-1. Verify Nzovu is running: `ps aux | grep nzovu`
-2. Check address: `NZOVU_ADDRESS=localhost:9000` (default Nzovu port)
-3. For remote servers, set `NZOVU_INSECURE=false` and provide certificates
-
-### Proto Loading Errors
-
-**Problem**: Cannot find proto files
-
-**Solution**: Ensure proto files are symlinked or copied from main Nzovu repo:
-
-```bash
-cd mcp
-ln -s ../proto proto
-```
-
-### MCP Connection Issues
-
-**Problem**: Claude Desktop doesn't see the server
-
-**Solution**:
-
-1. Restart Claude Desktop after config changes
-2. Check server logs in Claude's developer console
-3. Verify npx can access the package: `npx @nzovu/mcp-server --help`
-
-## Contributing
-
-See main [Nzovu CONTRIBUTING.md](../CONTRIBUTING.md) for contribution guidelines.
-
-## License
-
-MIT - See [LICENSE](../LICENSE) for details.
-
-## Links
-
-- [Nzovu GitHub](https://github.com/adrien19/nzovu)
-- [Model Context Protocol](https://modelcontextprotocol.io)
-- [Claude Desktop](https://claude.ai/download)
+MIT. Original attribution retained in the repository `LICENCE`.

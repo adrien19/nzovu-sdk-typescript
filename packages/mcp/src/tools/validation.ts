@@ -1,477 +1,361 @@
-/**
- * Zod validation schemas for MCP tool inputs
- *
- * These schemas provide runtime validation and TypeScript type inference
- * for all MCP tool handler arguments.
- */
-
 import { z } from 'zod';
 
-// ============================================================================
-// Shared Schema Components
-// ============================================================================
-
-/**
- * Duration string format (e.g., "30s", "5m", "1h")
- */
-const durationSchema = z
+const name = z.string().min(1);
+const int32 = z.number().int().min(-2147483648).max(2147483647);
+const nonnegative = int32.min(0);
+const int64 = z
   .string()
-  .regex(
-    /^\d+(?:\.\d+)?(?:ms|s|m|h)$/,
-    'Duration must be a valid format (e.g., "30s", "5m", "1h", "100ms")'
-  );
-
-/**
- * Lease policy configuration
- */
-const leasePolicySchema = z
-  .object({
-    base_lease: durationSchema.optional(),
-    max_extension: durationSchema.optional(),
-    heartbeat_timeout: durationSchema.optional(),
-    extend_step: durationSchema.optional(),
-    max_renewals: z.number().int().min(0).optional(),
-  })
-  .optional();
-
-/**
- * Retention policy configuration
- */
-const retentionPolicySchema = z
-  .object({
-    mode: z.enum(['delete_immediately', 'retain_duration', 'retain_forever']),
-    retention_seconds: z.number().int().min(0).optional(),
-  })
-  .optional();
-
-/**
- * Priority level (1-10)
- */
-const prioritySchema = z.number().int().min(1).max(10).default(5);
-
-// ============================================================================
-// Queue Management Schemas
-// ============================================================================
-
-export const createQueueSchema = z
-  .object({
-    queue_name: z.string().min(1).optional(), // Optional when 'name' is provided
-    name: z.string().min(1).optional(), // Alias for queue_name
-    queue_type: z.enum(['simple', 'exclusive']).default('simple'),
-    max_attempts: z.number().int().min(1).max(100).default(3),
-    auto_create_dlq: z.boolean().default(true),
-    dlq_name: z.string().optional(),
-    exclusivity_key: z.string().optional(),
-    lease_policy: leasePolicySchema,
-    retention_policy: retentionPolicySchema,
-    lease_duration: durationSchema.optional(), // Legacy, deprecated
-  })
-  .refine((data) => data.queue_name || data.name, {
-    message: 'Either queue_name or name must be provided',
-  })
-  .transform((data) => ({
-    ...data,
-    queue_name: data.queue_name || data.name!, // Ensure queue_name is always set
-  }));
-
-export const deleteQueueSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-});
-
-export const listQueuesSchema = z.object({
-  prefix: z.string().optional(),
-});
-
-export const getQueueStateSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-});
-
-// ============================================================================
-// Message Operation Schemas
-// ============================================================================
-
-export const postMessageSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-  message_id: z.string().min(1, 'Message ID is required'),
-  payload: z.record(z.unknown()).or(z.array(z.unknown())).or(z.string()),
-  priority: prioritySchema.optional(),
-  lease_duration: durationSchema.optional(),
-  schema_id: z.string().optional(),
-  schema_version: z.number().int().min(0).optional(),
-});
-
-const bulkMessageSchema = z.object({
-  message_id: z.string().min(1, 'Message ID is required'),
-  payload: z.record(z.unknown()).or(z.array(z.unknown())).or(z.string()),
-  priority: prioritySchema.optional(),
-  lease_duration: durationSchema.optional(),
-  schema_id: z.string().optional(),
-  schema_version: z.number().int().min(0).optional(),
-});
-
-export const postMessagesBulkSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-  messages: z
-    .array(bulkMessageSchema)
-    .min(1, 'At least one message is required')
-    .max(1000, 'Maximum 1000 messages per bulk operation'),
-  transaction_mode: z
-    .union([z.literal(0), z.literal(1)])
-    .optional()
-    .default(0),
-});
-
-export const getNextMessageSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-  lease_duration: durationSchema.optional(),
-  exclusivity_key: z.string().optional(),
-  worker_id: z.string().optional(),
-});
-
-export const peekMessagesSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-  limit: z.number().int().min(1).max(100).default(10),
-  priority_min: z.number().int().min(1).max(10).optional(),
-  priority_max: z.number().int().min(1).max(10).optional(),
-});
-
-export const acknowledgeMessageSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-  message_id: z.string().min(1, 'Message ID is required'),
-  status: z.enum(['completed', 'errored']),
-  worker_id: z.string().optional(),
-  attempt_id: z.string().optional(),
-});
-
-export const renewMessageLeaseSchema = z.object({
-  worker_id: z.string().min(1),
-  attempt_id: z.string().min(1),
-  queue_name: z.string().min(1, 'Queue name is required'),
-  message_id: z.string().min(1, 'Message ID is required'),
-  lease_duration: durationSchema.optional(),
-});
-
-export const cancelMessageSchema = z.object({
-  queue_name: z.string().min(1, 'Queue name is required'),
-  message_id: z.string().min(1, 'Message ID is required'),
-  reason: z.string().optional(),
-});
-
-// ============================================================================
-// Schedule Schemas
-// ============================================================================
-
-export const createScheduleSchema = z
-  .object({
-    schedule_id: z.string().min(1, 'Schedule ID is required'),
-    queue_name: z.string().min(1, 'Queue name is required'),
-    schedule_type: z.enum(['cron', 'calendar']),
-    payload: z.record(z.unknown()).or(z.array(z.unknown())),
-    priority: prioritySchema.optional(),
-    enabled: z.boolean().default(true),
-    timezone: z.string().optional(), // IANA timezone (e.g., "America/New_York")
-    // Cron schedule fields
-    cron_expression: z.string().optional(),
-    // Calendar schedule fields
-    calendar_type: z.enum(['once', 'weekly', 'daily', 'business_days']).optional(),
-    times_of_day: z
-      .array(z.string().regex(/^\d{2}:\d{2}$/, 'Time must be in HH:MM format'))
-      .optional(),
-    days_of_week: z.array(z.number().int().min(1).max(7)).optional(),
-    business_calendar_id: z.string().optional(), // For business_days calendar type
-  })
+  .regex(/^-?\d+$/)
   .refine(
-    (data) => {
-      if (data.schedule_type === 'cron') {
-        return !!data.cron_expression;
-      }
-      return true;
-    },
-    { message: 'cron_expression is required for cron schedule type' }
+    (value) =>
+      /^-?\d+$/.test(value) &&
+      BigInt(value) >= -9223372036854775808n &&
+      BigInt(value) <= 9223372036854775807n,
+    'int64 out of range'
+  );
+export const durationSchema = z
+  .object({
+    seconds: z
+      .string()
+      .regex(/^\d+$/)
+      .refine(
+        (value) => /^\d+$/.test(value) && BigInt(value) <= 315576000000n,
+        'duration out of range'
+      ),
+    nanos: z.number().int().min(0).max(999999999).default(0),
+  })
+  .strict();
+const timestamp = z
+  .object({
+    seconds: int64.refine(
+      (value) =>
+        /^-?\d+$/.test(value) && BigInt(value) >= -62135596800n && BigInt(value) <= 253402300799n,
+      'timestamp out of range'
+    ),
+    nanos: z.number().int().min(0).max(999999999).default(0),
+  })
+  .strict();
+const priority = z.enum(['0', '1', '2', '3', '4']);
+type Json = null | boolean | number | string | Json[] | { [key: string]: Json };
+const json: z.ZodType<Json> = z.lazy(() =>
+  z.union([z.null(), z.boolean(), z.number().finite(), z.string(), z.array(json), z.record(json)])
+);
+const base64 = z
+  .string()
+  .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/)
+  .refine(
+    (value) => Buffer.from(value, 'base64').length <= 4096,
+    'header value exceeds 4096 bytes'
+  );
+const headers = z
+  .array(
+    z
+      .object({
+        key: name
+          .regex(/^[a-z0-9-]+$/)
+          .refine((key) => !/^(x-nzovu-|x-internal-|x-system-)/.test(key), 'reserved header key'),
+        value: base64,
+      })
+      .strict()
   )
   .refine(
-    (data) => {
-      if (data.schedule_type === 'calendar') {
-        return !!data.calendar_type;
-      }
-      return true;
-    },
-    { message: 'calendar_type is required for calendar schedule type' }
+    (values) =>
+      values.reduce(
+        (total, header) =>
+          total + Buffer.byteLength(header.key) + Buffer.from(header.value, 'base64').length,
+        0
+      ) <= 32768,
+    'headers exceed 32768 bytes'
   );
-
-export const getScheduleSchema = z.object({
-  schedule_id: z.string().min(1, 'Schedule ID is required'),
-});
-
-export const listSchedulesSchema = z.object({
-  prefix: z.string().optional(),
-});
-
-export const deleteScheduleSchema = z.object({
-  schedule_id: z.string().min(1, 'Schedule ID is required'),
-});
-
-export const pauseScheduleSchema = z.object({
-  schedule_id: z.string().min(1, 'Schedule ID is required'),
-});
-
-export const resumeScheduleSchema = z.object({
-  schedule_id: z.string().min(1, 'Schedule ID is required'),
-});
-
-export const getScheduleHistorySchema = z.object({
-  schedule_id: z.string().min(1, 'Schedule ID is required'),
-  limit: z.number().int().min(1).max(1000).optional(),
-});
-
-// ============================================================================
-// DLQ Schemas
-// ============================================================================
-
-// Helper to normalize dlq_name from either dlq_name or queue_name input
-const dlqNamePreprocess = z.preprocess(
-  (input: unknown) => {
-    if (typeof input === 'object' && input !== null) {
-      const obj = input as Record<string, unknown>;
-      // Ensure dlq_name is set from either field
-      if (!obj.dlq_name && obj.queue_name) {
-        return { ...obj, dlq_name: obj.queue_name };
-      }
-    }
-    return input;
-  },
-  z.object({
-    dlq_name: z.string().min(1, 'DLQ name is required'),
-    queue_name: z.string().optional(), // Keep for backward compat
-    limit: z.number().int().min(1).max(100).default(10),
+const leasePolicy = z
+  .object({
+    baseLease: durationSchema.optional(),
+    maxExtension: durationSchema.optional(),
+    heartbeatTimeout: durationSchema.optional(),
+    extendStep: durationSchema.optional(),
+    maxRenewals: nonnegative.optional(),
   })
-);
-
-export const getDLQMessagesSchema = dlqNamePreprocess;
-
-export const requeueFromDLQSchema = z.preprocess(
-  (input: unknown) => {
-    if (typeof input === 'object' && input !== null) {
-      const obj = input as Record<string, unknown>;
-      const result = { ...obj };
-      // Normalize dlq_name
-      if (!result.dlq_name && result.queue_name) {
-        result.dlq_name = result.queue_name;
-      }
-      // Normalize message_ids
-      if (!result.message_ids && result.message_id) {
-        result.message_ids = [result.message_id as string];
-      } else if (typeof result.message_ids === 'string') {
-        result.message_ids = [result.message_ids];
-      }
-      return result;
-    }
-    return input;
-  },
-  z.object({
-    dlq_name: z.string().min(1, 'DLQ name is required'),
-    queue_name: z.string().optional(),
-    message_id: z.string().optional(),
-    message_ids: z.array(z.string()).min(1, 'At least one message ID is required'),
-    target_queue: z.string().min(1),
+  .strict();
+const payload = z
+  .object({
+    data: z.record(json).optional(),
+    metadata: z.record(json).optional(),
+    contentType: z.string().optional(),
+    schemaId: z.string().optional(),
+    schemaVersion: nonnegative.optional(),
   })
-);
-
-export const deleteFromDLQSchema = z.preprocess(
-  (input: unknown) => {
-    if (typeof input === 'object' && input !== null) {
-      const obj = input as Record<string, unknown>;
-      const result = { ...obj };
-      // Normalize dlq_name
-      if (!result.dlq_name && result.queue_name) {
-        result.dlq_name = result.queue_name;
-      }
-      // Normalize message_ids
-      if (!result.message_ids && result.message_id) {
-        result.message_ids = [result.message_id as string];
-      } else if (typeof result.message_ids === 'string') {
-        result.message_ids = [result.message_ids];
-      }
-      return result;
-    }
-    return input;
-  },
-  z.object({
-    dlq_name: z.string().min(1, 'DLQ name is required'),
-    queue_name: z.string().optional(),
-    message_id: z.string().optional(),
-    message_ids: z.array(z.string()).min(1, 'At least one message ID is required'),
+  .strict();
+const message = z
+  .object({
+    messageId: name.regex(/^[a-zA-Z0-9_-]{1,256}$/),
+    metadata: z
+      .object({
+        payload: payload.optional(),
+        priority: priority.default('0'),
+        maxAttempts: int32.min(-1).optional(),
+        leaseDuration: durationSchema.optional(),
+        leasePolicy: leasePolicy.optional(),
+        scheduledTime: timestamp.optional(),
+        headers: headers.optional(),
+      })
+      .strict(),
   })
-);
-
-export const purgeDLQSchema = z.preprocess(
-  (input: unknown) => {
-    if (typeof input === 'object' && input !== null) {
-      const obj = input as Record<string, unknown>;
-      if (!obj.dlq_name && obj.queue_name) {
-        return { ...obj, dlq_name: obj.queue_name };
-      }
-    }
-    return input;
-  },
-  z.object({
-    dlq_name: z.string().min(1, 'DLQ name is required'),
-    queue_name: z.string().optional(),
+  .strict();
+const bulkMessage = message.extend({
+  messageId: z.string(),
+  metadata: message.shape.metadata
+    .extend({
+      priority: int64.optional(),
+      payload: payload.extend({ schemaVersion: int32.optional() }).optional(),
+      headers: z
+        .array(
+          z
+            .object({
+              key: z.string(),
+              value: z
+                .string()
+                .regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
+            })
+            .strict()
+        )
+        .optional(),
+    })
+    .optional(),
+});
+const time = z.object({ hour: int32, minute: int32.optional(), second: int32.optional() }).strict();
+const holidayRule = z
+  .object({
+    fixed: z.object({ month: int32, day: int32 }).strict().optional(),
+    relative: z.object({ month: int32, weekday: int32, occurrence: int32 }).strict().optional(),
+    easterOffset: z.object({ daysOffset: int32 }).strict().optional(),
   })
-);
-
-export const getDLQStatsSchema = z.preprocess(
-  (input: unknown) => {
-    if (typeof input === 'object' && input !== null) {
-      const obj = input as Record<string, unknown>;
-      if (!obj.dlq_name && obj.queue_name) {
-        return { ...obj, dlq_name: obj.queue_name };
-      }
-    }
-    return input;
-  },
-  z.object({
-    dlq_name: z.string().min(1, 'DLQ name is required'),
-    queue_name: z.string().optional(),
+  .strict()
+  .refine((value) => Object.keys(value).length === 1, 'one holiday rule required');
+const calendarRule = z
+  .object({
+    monthly: z
+      .object({
+        dayType: int32,
+        dayValue: int32.optional(),
+        occurrence: int32.optional(),
+        months: z.array(int32).optional(),
+      })
+      .strict()
+      .optional(),
+    weekly: z
+      .object({
+        daysOfWeek: z.array(int32),
+        weekInterval: int32.optional(),
+        startWeek: timestamp.optional(),
+      })
+      .strict()
+      .optional(),
+    daily: z
+      .object({
+        dayInterval: int32.optional(),
+        weekdaysOnly: z.boolean().optional(),
+        startDate: timestamp.optional(),
+      })
+      .strict()
+      .optional(),
+    yearly: z
+      .object({ month: int32, day: int32, adjustForLeapYear: z.boolean().optional() })
+      .strict()
+      .optional(),
+    businessDays: z
+      .object({ businessCalendarId: z.string().optional(), dayOffset: int32.optional() })
+      .strict()
+      .optional(),
+    custom: z
+      .object({
+        expression: z.string().optional(),
+        ruleType: z.string().optional(),
+        parameters: z.record(z.string()).optional(),
+      })
+      .strict()
+      .optional(),
+    executionTimes: z.array(time).optional(),
+    validFrom: timestamp.optional(),
+    validUntil: timestamp.optional(),
   })
-);
-
-// ============================================================================
-// Schema Management Schemas
-// ============================================================================
-
-export const registerSchemaInputSchema = z.object({
-  schema_id: z.string().min(1, 'Schema ID is required'),
-  name: z.string().min(1, 'Schema name is required'),
-  content: z.string().min(1, 'Schema content is required'),
-  description: z.string().optional(),
-  content_type: z.string().default('json-schema'),
-  metadata: z.record(z.string()).optional(),
-});
-
-export const getSchemaSchema = z.object({
-  schema_id: z.string().min(1, 'Schema ID is required'),
-  version: z.number().int().min(0).default(0), // 0 = latest
-});
-
-export const listSchemasSchema = z.object({
-  prefix: z.string().optional(),
-  limit: z.number().int().min(1).max(1000).default(100),
-  active_only: z.boolean().optional(),
-  include_all_versions: z.boolean().optional(),
-});
-
-export const deleteSchemaSchema = z.object({
-  schema_id: z.string().min(1, 'Schema ID is required'),
-  version: z.number().int().min(0).optional(), // 0 = all versions
-});
-
-export const validatePayloadSchema = z.object({
-  schema_id: z.string().min(1, 'Schema ID is required'),
-  payload: z.string().min(1, 'Payload is required'),
-  version: z.number().int().min(0).default(0),
-});
-
-// ============================================================================
-// Type Exports (inferred from schemas)
-// ============================================================================
-
-export type CreateQueueInput = z.infer<typeof createQueueSchema>;
-export type DeleteQueueInput = z.infer<typeof deleteQueueSchema>;
-export type ListQueuesInput = z.infer<typeof listQueuesSchema>;
-export type GetQueueStateInput = z.infer<typeof getQueueStateSchema>;
-
-export type PostMessageInput = z.infer<typeof postMessageSchema>;
-export type PostMessagesBulkInput = z.infer<typeof postMessagesBulkSchema>;
-export type GetNextMessageInput = z.infer<typeof getNextMessageSchema>;
-export type PeekMessagesInput = z.infer<typeof peekMessagesSchema>;
-export type AcknowledgeMessageInput = z.infer<typeof acknowledgeMessageSchema>;
-export type RenewMessageLeaseInput = z.infer<typeof renewMessageLeaseSchema>;
-export type CancelMessageInput = z.infer<typeof cancelMessageSchema>;
-
-export type CreateScheduleInput = z.infer<typeof createScheduleSchema>;
-export type GetScheduleInput = z.infer<typeof getScheduleSchema>;
-export type ListSchedulesInput = z.infer<typeof listSchedulesSchema>;
-export type DeleteScheduleInput = z.infer<typeof deleteScheduleSchema>;
-export type PauseScheduleInput = z.infer<typeof pauseScheduleSchema>;
-export type ResumeScheduleInput = z.infer<typeof resumeScheduleSchema>;
-export type GetScheduleHistoryInput = z.infer<typeof getScheduleHistorySchema>;
-
-export type GetDLQMessagesInput = z.infer<typeof getDLQMessagesSchema>;
-export type RequeueFromDLQInput = z.infer<typeof requeueFromDLQSchema>;
-export type DeleteFromDLQInput = z.infer<typeof deleteFromDLQSchema>;
-export type PurgeDLQInput = z.infer<typeof purgeDLQSchema>;
-export type GetDLQStatsInput = z.infer<typeof getDLQStatsSchema>;
-
-export type RegisterSchemaInput = z.infer<typeof registerSchemaInputSchema>;
-export type GetSchemaInput = z.infer<typeof getSchemaSchema>;
-export type ListSchemasInput = z.infer<typeof listSchemasSchema>;
-export type DeleteSchemaInput = z.infer<typeof deleteSchemaSchema>;
-export type ValidatePayloadInput = z.infer<typeof validatePayloadSchema>;
-
-// ============================================================================
-// Schema Registry for Dynamic Lookup
-// ============================================================================
-
-/**
- * Map of tool names to their validation schemas
- */
-export const toolSchemas: Record<string, z.ZodSchema> = {
-  // Queue Management
-  create_queue: createQueueSchema,
-  delete_queue: deleteQueueSchema,
-  list_queues: listQueuesSchema,
-  get_queue_state: getQueueStateSchema,
-
-  // Message Operations
-  post_message: postMessageSchema,
-  post_messages_bulk: postMessagesBulkSchema,
-  get_next_message: getNextMessageSchema,
-  peek_messages: peekMessagesSchema,
-  acknowledge_message: acknowledgeMessageSchema,
-  renew_message_lease: renewMessageLeaseSchema,
-  cancel_message: cancelMessageSchema,
-
-  // Scheduling
-  create_schedule: createScheduleSchema,
-  get_schedule: getScheduleSchema,
-  list_schedules: listSchedulesSchema,
-  delete_schedule: deleteScheduleSchema,
-  pause_schedule: pauseScheduleSchema,
-  resume_schedule: resumeScheduleSchema,
-  get_schedule_history: getScheduleHistorySchema,
-
-  // Dead Letter Queue
-  get_dlq_messages: getDLQMessagesSchema,
-  requeue_from_dlq: requeueFromDLQSchema,
-  delete_from_dlq: deleteFromDLQSchema,
-  purge_dlq: purgeDLQSchema,
-  get_dlq_stats: getDLQStatsSchema,
-
-  // Schema Management
-  register_schema: registerSchemaInputSchema,
-  get_schema: getSchemaSchema,
-  list_schemas: listSchemasSchema,
-  delete_schema: deleteSchemaSchema,
-  validate_payload: validatePayloadSchema,
+  .strict()
+  .refine(
+    (value) =>
+      ['monthly', 'weekly', 'daily', 'yearly', 'businessDays', 'custom'].filter(
+        (key) => key in value
+      ).length <= 1,
+    'calendar rule variants are mutually exclusive'
+  );
+export const calendarSchema = z
+  .object({
+    type: int32,
+    rules: z.array(calendarRule),
+    timezone: z.string(),
+    businessCalendar: z
+      .object({
+        calendarId: z.string().optional(),
+        name: z.string().optional(),
+        description: z.string().optional(),
+        timezone: z.string().optional(),
+        weekendDays: z.array(int32).optional(),
+        holidays: z
+          .array(
+            z
+              .object({
+                name: z.string(),
+                date: timestamp.optional(),
+                recurringYearly: z.boolean().optional(),
+                rule: holidayRule.optional(),
+              })
+              .strict()
+          )
+          .optional(),
+      })
+      .strict()
+      .optional(),
+    exceptions: z
+      .array(
+        z
+          .object({
+            date: timestamp,
+            type: int32,
+            rescheduleTo: timestamp.optional(),
+            extraTimes: z.array(time).optional(),
+            reason: z.string().optional(),
+          })
+          .strict()
+      )
+      .optional(),
+  })
+  .strict();
+const queueMetadata = z
+  .object({
+    type: z.number().int().min(0).max(1).optional(),
+    defaultMaxAttempts: int32.min(-1).optional(),
+    leaseDuration: durationSchema.optional(),
+    exclusivityKey: z.string().optional(),
+    deadLetterQueueName: z.string().optional(),
+    autoCreateDlq: z.boolean().optional(),
+    schemaId: z.string().optional(),
+    schemaRequired: z.boolean().optional(),
+    maxPayloadSize: nonnegative.optional(),
+    allowedContentTypes: z.array(z.string()).optional(),
+    priorityConfig: z
+      .object({
+        policy: z.number().int().min(0).max(2),
+        priorityWeights: z.record(z.enum(['0', '2', '4']), int32.min(1)).optional(),
+        ageBoostThreshold: durationSchema.optional(),
+        ageBoostMultiplier: int32.min(0).optional(),
+      })
+      .strict()
+      .optional(),
+    leasePolicy: leasePolicy.optional(),
+    messageRetentionPolicy: z
+      .object({ mode: z.number().int().min(0).max(2), retentionSeconds: int64.optional() })
+      .strict()
+      .optional(),
+  })
+  .strict();
+const schedule = z
+  .object({
+    scheduleId: name,
+    metadata: z
+      .object({
+        queueName: name,
+        payload: payload.optional(),
+        priority: priority.default('0'),
+        cronSchedule: name.optional(),
+        calendarSchedule: calendarSchema.optional(),
+        hasMaxMessages: z.boolean().optional(),
+        maxMessages: int64.optional(),
+        leaseDuration: durationSchema.optional(),
+        timezone: z.string().optional(),
+        headers: headers.optional(),
+      })
+      .strict()
+      .refine(
+        (value) =>
+          Number(value.cronSchedule !== undefined) +
+            Number(value.calendarSchedule !== undefined) ===
+          1,
+        'exactly one schedule configuration required'
+      ),
+  })
+  .strict();
+const page = {
+  pageSize: z.number().int().min(0).max(1000).optional(),
+  pageToken: z.string().optional(),
 };
-
-/**
- * Validate tool input and return typed result
- *
- * @throws Error with validation details if input is invalid
- */
-export function validateToolInput<T>(toolName: string, input: unknown): T {
-  const schema = toolSchemas[toolName];
-  if (!schema) {
-    throw new Error(`Unknown tool: ${toolName}`);
-  }
-
-  const result = schema.safeParse(input);
-  if (!result.success) {
-    const errors = result.error.errors.map((e) => `${e.path.join('.')}: ${e.message}`).join('; ');
-    throw new Error(`Validation failed: ${errors}`);
-  }
-
-  return result.data as T;
+const list = { prefix: z.string().optional(), ...page };
+const queue = { queueName: name };
+const messageId = { ...queue, messageId: name };
+const owner = { ...messageId, workerId: name, attemptId: name };
+const scheduleId = { scheduleId: name };
+const schemaId = { schemaId: name, version: nonnegative.optional() };
+const dlq = { dlqName: name };
+const object = <T extends z.ZodRawShape>(shape: T) => z.object(shape).strict();
+export const toolSchemas = {
+  create_queue: object({ name, metadata: queueMetadata.optional() }),
+  delete_queue: object({ name }),
+  get_queue_state: object(queue),
+  list_queues: object(list),
+  post_message: object({ ...queue, message }),
+  post_messages_bulk: object({
+    ...queue,
+    messages: z.array(bulkMessage).min(1).max(1000),
+    transactionMode: z.union([z.literal(0), z.literal(1)]).optional(),
+  }),
+  get_next_message: object({
+    ...queue,
+    leaseDuration: durationSchema.optional(),
+    exclusivityKey: z.string().optional(),
+    workerId: name.optional(),
+    attemptId: name.optional(),
+  }),
+  acknowledge_message: object({ ...owner, state: z.union([z.literal(3), z.literal(5)]) }),
+  cancel_message: object({ ...messageId, reason: z.string().optional() }),
+  send_message_heartbeat: object(owner),
+  renew_message_lease: object({ ...owner, leaseDuration: durationSchema.optional() }),
+  peek_messages: object({
+    ...queue,
+    ...page,
+    priorityRange: z
+      .object({ min: priority, max: priority })
+      .strict()
+      .refine((value) => Number(value.min) <= Number(value.max), 'priority range is reversed')
+      .optional(),
+  }),
+  create_schedule: object({ schedule }),
+  get_schedule: object(scheduleId),
+  delete_schedule: object(scheduleId),
+  pause_schedule: object(scheduleId),
+  resume_schedule: object(scheduleId),
+  list_schedules: object(list),
+  get_schedule_history: object({ ...scheduleId, ...page }),
+  validate_calendar_schedule: object({ calendarSchedule: calendarSchema }),
+  preview_calendar_schedule: object({
+    calendarSchedule: calendarSchema,
+    count: nonnegative.optional(),
+  }),
+  get_dlq_messages: object({ ...dlq, ...page }),
+  requeue_from_dlq: object({ ...dlq, messageId: name, targetQueue: name }),
+  delete_from_dlq: object({ ...dlq, messageId: name }),
+  purge_dlq: object(dlq),
+  get_dlq_stats: object(dlq),
+  register_schema: object({
+    schemaId: name,
+    name,
+    content: name,
+    description: z.string().optional(),
+    contentType: z.literal('json-schema').optional(),
+    metadata: z.record(z.string()).optional(),
+  }),
+  get_schema: object(schemaId),
+  delete_schema: object(schemaId),
+  list_schemas: object({ ...list, activeOnly: z.boolean().optional() }),
+  validate_payload: object({ ...schemaId, payload: json }),
+};
+export type ToolName = keyof typeof toolSchemas;
+export function validateToolInput(name: ToolName, input: unknown): any {
+  return toolSchemas[name].parse(input);
 }

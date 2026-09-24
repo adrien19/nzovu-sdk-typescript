@@ -1,773 +1,261 @@
-/**
- * Tool registry - defines all available MCP tools for Nzovu
- */
+import { QueueServiceTypes as R, NzovuClient } from '@nzovu/client';
+import { toJsonSchemaCompat } from '@modelcontextprotocol/sdk/server/zod-json-schema-compat.js';
+import type { Tool } from '@modelcontextprotocol/sdk/types.js';
+import { toolSchemas, ToolName } from './validation.js';
 
-import { Tool } from '@modelcontextprotocol/sdk/types.js';
-
-// Queue Management Tools
-export const createQueueTool: Tool = {
-  name: 'create_queue',
-  description: 'Create a new Nzovu queue with specified configuration',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue to create',
-      },
-      queue_type: {
-        type: 'string',
-        enum: ['simple', 'exclusive'],
-        description: 'Queue type (default: simple)',
-      },
-      max_attempts: {
-        type: 'number',
-        description: 'Maximum dequeue attempts before moving to DLQ (default: 3)',
-        default: 3,
-      },
-      auto_create_dlq: {
-        type: 'boolean',
-        description: 'Automatically create dead letter queue (default: true)',
-        default: true,
-      },
-      dlq_name: {
-        type: 'string',
-        description: 'Custom dead letter queue name',
-      },
-      exclusivity_key: {
-        type: 'string',
-        description: 'Exclusivity key for exclusive queues (required for exclusive queue type)',
-      },
-      // LeasePolicy fields (preferred over legacy lease_duration)
-      lease_policy: {
-        type: 'object',
-        description: 'Lease policy configuration for message processing timeouts',
-        properties: {
-          base_lease: {
-            type: 'string',
-            description: 'Initial lease duration (e.g., "30s", "5m"). Default: 30s',
-          },
-          max_extension: {
-            type: 'string',
-            description: 'Maximum additional time via heartbeats (e.g., "10m")',
-          },
-          heartbeat_timeout: {
-            type: 'string',
-            description:
-              'Maximum gap between heartbeats (e.g., "10s"). If unset, heartbeat timeout disabled',
-          },
-          extend_step: {
-            type: 'string',
-            description: 'Time to extend lease per heartbeat (e.g., "5s")',
-          },
-          max_renewals: {
-            type: 'number',
-            description: 'Maximum lease renewals allowed. 0 = unlimited',
-          },
-        },
-      },
-      // MessageRetentionPolicy fields
-      retention_policy: {
-        type: 'object',
-        description: 'Message retention policy after processing',
-        properties: {
-          mode: {
-            type: 'string',
-            enum: ['delete_immediately', 'retain_duration', 'retain_forever'],
-            description:
-              'Retention mode: delete_immediately (default), retain_duration, or retain_forever',
-          },
-          retention_seconds: {
-            type: 'number',
-            description:
-              'Retention duration in seconds (for retain_duration mode). E.g., 2592000 for 30 days',
-          },
-        },
-      },
-      // Legacy field (deprecated, use lease_policy instead)
-      lease_duration: {
-        type: 'string',
-        description:
-          '[DEPRECATED: Use lease_policy.base_lease instead] Default message lease duration (e.g., "30s", "5m")',
-      },
-    },
-    required: ['queue_name'],
-  },
+type Definition = {
+  rpc: string;
+  description: string;
+  readOnly: boolean;
+  destructive?: boolean;
+  execute: (client: NzovuClient, args: any) => Promise<unknown>;
 };
-
-export const deleteQueueTool: Tool = {
-  name: 'delete_queue',
-  description: 'Delete an existing queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue to delete',
-      },
-    },
-    required: ['queue_name'],
+const success = async (operation: Promise<boolean>) => ({ success: await operation });
+export const definitions: Record<ToolName, Definition> = {
+  create_queue: {
+    rpc: 'createQueue',
+    description: 'Create a queue with optional metadata.',
+    readOnly: false,
+    execute: (c, a) =>
+      success(c.queues.createQueue(a.name, R.CreateQueueRequest.fromJSON(a).metadata)),
   },
-};
-
-export const listQueuesTool: Tool = {
-  name: 'list_queues',
-  description: 'List all queues in the system',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      prefix: {
-        type: 'string',
-        description: 'Filter queues by name prefix',
-      },
+  delete_queue: {
+    rpc: 'deleteQueue',
+    description: 'Delete a queue.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => success(c.queues.deleteQueue(a.name)),
+  },
+  get_queue_state: {
+    rpc: 'getQueueState',
+    description: 'Get queue counts and earliest deadline.',
+    readOnly: true,
+    execute: (c, a) => c.queues.getQueueState(a.queueName),
+  },
+  list_queues: {
+    rpc: 'listQueues',
+    description: 'Read one queue page and continuation token.',
+    readOnly: true,
+    execute: (c, a) => c.queues.listQueues(a),
+  },
+  post_message: {
+    rpc: 'postMessage',
+    description: 'Post a message. Priority 0–4, headers use base64 bytes.',
+    readOnly: false,
+    execute: (c, a) =>
+      success(c.messages.postMessage(a.queueName, R.PostMessageRequest.fromJSON(a).message!)),
+  },
+  post_messages_bulk: {
+    rpc: 'postMessagesBulk',
+    description:
+      'Post 1–1000 messages. Mode 0 atomic, 1 best effort. Returns all per-item results.',
+    readOnly: false,
+    execute: (c, a) =>
+      c.messages.postMessagesBulk(
+        a.queueName,
+        R.PostMessagesBulkRequest.fromJSON(a).messages,
+        a.transactionMode
+      ),
+  },
+  get_next_message: {
+    rpc: 'getNextMessage',
+    description:
+      'Acquire a message. Save the returned workerId/attemptId for ownership operations.',
+    readOnly: false,
+    execute: async (c, a) => {
+      const result = await c.messages.getNextMessage(
+        a.queueName,
+        a.leaseDuration,
+        a.exclusivityKey,
+        false,
+        1000,
+        a.workerId,
+        undefined,
+        a.attemptId
+      );
+      return { message: result.message, workerId: result.workerId, attemptId: result.attemptId };
     },
   },
-};
-
-export const getQueueStateTool: Tool = {
-  name: 'get_queue_state',
-  description: 'Get current state and statistics for a queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue to inspect',
-      },
-    },
-    required: ['queue_name'],
+  acknowledge_message: {
+    rpc: 'acknowledgeMessage',
+    description: 'ACK the exact claim: state 3 COMPLETED or 5 ERRORED.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) =>
+      success(
+        c.messages.acknowledgeMessage(a.queueName, a.messageId, a.state, a.workerId, a.attemptId)
+      ),
+  },
+  cancel_message: {
+    rpc: 'cancelMessage',
+    description: 'Cancel a message before processing.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => success(c.messages.cancelMessage(a.queueName, a.messageId, a.reason)),
+  },
+  send_message_heartbeat: {
+    rpc: 'sendMessageHeartBeat',
+    description: 'Heartbeat the exact acquired claim.',
+    readOnly: false,
+    execute: (c, a) => c.messages.sendHeartbeat(a.queueName, a.messageId, a.workerId, a.attemptId),
+  },
+  renew_message_lease: {
+    rpc: 'renewMessageLease',
+    description: 'Extend the exact acquired claim.',
+    readOnly: false,
+    execute: (c, a) =>
+      c.messages.renewMessageLease(
+        a.queueName,
+        a.messageId,
+        a.leaseDuration,
+        a.workerId,
+        a.attemptId
+      ),
+  },
+  peek_messages: {
+    rpc: 'peekQueueMessages',
+    description: 'Read one message page without acquiring leases.',
+    readOnly: true,
+    execute: (c, a) => c.messages.peekQueueMessages(a.queueName, a),
+  },
+  create_schedule: {
+    rpc: 'createSchedule',
+    description: 'Create a cron or calendar schedule.',
+    readOnly: false,
+    execute: (c, a) =>
+      success(c.schedules.createSchedule(R.CreateScheduleRequest.fromJSON(a).schedule!)),
+  },
+  get_schedule: {
+    rpc: 'getSchedule',
+    description: 'Read complete schedule details.',
+    readOnly: true,
+    execute: async (c, a) => ({ schedule: await c.schedules.getSchedule(a.scheduleId) }),
+  },
+  delete_schedule: {
+    rpc: 'deleteSchedule',
+    description: 'Delete a schedule.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => success(c.schedules.deleteSchedule(a.scheduleId)),
+  },
+  pause_schedule: {
+    rpc: 'pauseSchedule',
+    description: 'Pause a schedule.',
+    readOnly: false,
+    execute: (c, a) => success(c.schedules.pauseSchedule(a.scheduleId)),
+  },
+  resume_schedule: {
+    rpc: 'resumeSchedule',
+    description: 'Resume a paused schedule.',
+    readOnly: false,
+    execute: (c, a) => success(c.schedules.resumeSchedule(a.scheduleId)),
+  },
+  list_schedules: {
+    rpc: 'listSchedules',
+    description: 'Read one schedule page and continuation token.',
+    readOnly: true,
+    execute: (c, a) => c.schedules.listSchedules(a),
+  },
+  get_schedule_history: {
+    rpc: 'getScheduleHistory',
+    description: 'Read one durable execution-history page.',
+    readOnly: true,
+    execute: (c, a) => c.schedules.getScheduleHistory(a.scheduleId, a),
+  },
+  validate_calendar_schedule: {
+    rpc: 'validateCalendarSchedule',
+    description: 'Validate a calendar and return every issue.',
+    readOnly: true,
+    execute: (c, a) =>
+      c.schedules.validateCalendarSchedule(
+        R.ValidateCalendarScheduleRequest.fromJSON(a).calendarSchedule!
+      ),
+  },
+  preview_calendar_schedule: {
+    rpc: 'previewCalendarSchedule',
+    description: 'Preview calendar executions with exact timestamps.',
+    readOnly: true,
+    execute: (c, a) =>
+      c.schedules.previewCalendarSchedule(
+        R.PreviewCalendarScheduleRequest.fromJSON(a).calendarSchedule!,
+        a.count
+      ),
+  },
+  get_dlq_messages: {
+    rpc: 'getDlqMessages',
+    description: 'Read one DLQ message page.',
+    readOnly: true,
+    execute: (c, a) => c.dlq.getDLQMessages(a.dlqName, a),
+  },
+  requeue_from_dlq: {
+    rpc: 'requeueFromDlq',
+    description: 'Move a DLQ message to the required destination queue.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => success(c.dlq.requeueFromDLQ(a.dlqName, a.messageId, a.targetQueue)),
+  },
+  delete_from_dlq: {
+    rpc: 'deleteFromDlq',
+    description: 'Permanently delete a DLQ message.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => success(c.dlq.deleteFromDLQ(a.dlqName, a.messageId)),
+  },
+  purge_dlq: {
+    rpc: 'purgeDlq',
+    description: 'Permanently purge every DLQ message.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => success(c.dlq.purgeDLQ(a.dlqName)),
+  },
+  get_dlq_stats: {
+    rpc: 'getDlqStats',
+    description: 'Read exact DLQ counts and timestamps.',
+    readOnly: true,
+    execute: (c, a) => c.dlq.getDLQStats(a.dlqName),
+  },
+  register_schema: {
+    rpc: 'registerSchema',
+    description: 'Register a named JSON Schema version.',
+    readOnly: false,
+    execute: (c, a) => c.schemas.registerSchema(a.schemaId, a.content, a),
+  },
+  get_schema: {
+    rpc: 'getSchema',
+    description: 'Read a schema version; zero selects latest.',
+    readOnly: true,
+    execute: async (c, a) => ({ schema: await c.schemas.getSchema(a.schemaId, a.version) }),
+  },
+  delete_schema: {
+    rpc: 'deleteSchema',
+    description: 'Deactivate versions; zero selects all. Returns deactivation count.',
+    readOnly: false,
+    destructive: true,
+    execute: (c, a) => c.schemas.deleteSchema(a.schemaId, a.version),
+  },
+  list_schemas: {
+    rpc: 'listSchemas',
+    description: 'Read one schema-family page, total family count and continuation token.',
+    readOnly: true,
+    execute: (c, a) => c.schemas.listSchemas(a),
+  },
+  validate_payload: {
+    rpc: 'validatePayload',
+    description: 'Validate JSON against a schema version and return every error.',
+    readOnly: true,
+    execute: (c, a) => c.schemas.validatePayload(a.schemaId, JSON.stringify(a.payload), a.version),
   },
 };
-
-// Message Operation Tools
-export const postMessageTool: Tool = {
-  name: 'post_message',
-  description: 'Post a message to a queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      message_id: {
-        type: 'string',
-        description: 'Unique message identifier',
-      },
-      payload: {
-        type: 'object',
-        description: 'Message payload as JSON object',
-      },
-      priority: {
-        type: 'number',
-        minimum: 1,
-        maximum: 10,
-        description: 'Message priority (1-10, default: 5)',
-      },
-      lease_duration: {
-        type: 'string',
-        description: 'Override default lease duration (e.g., "5m")',
-      },
-      schema_id: {
-        type: 'string',
-        description: 'Schema ID for validation (e.g., "user.profile.v1")',
-      },
-      schema_version: {
-        type: 'number',
-        description: 'Schema version number for validation',
-      },
-    },
-    required: ['queue_name', 'message_id', 'payload'],
+export const allTools: Tool[] = (Object.keys(definitions) as ToolName[]).map((name) => ({
+  name,
+  description: definitions[name].description,
+  inputSchema: toJsonSchemaCompat(toolSchemas[name], {
+    target: 'jsonSchema7',
+  }) as Tool['inputSchema'],
+  annotations: {
+    readOnlyHint: definitions[name].readOnly,
+    destructiveHint: definitions[name].destructive ?? false,
+    idempotentHint: definitions[name].readOnly,
+    openWorldHint: true,
   },
-};
-
-export const postMessagesBulkTool: Tool = {
-  name: 'post_messages_bulk',
-  description:
-    'Post multiple messages to a queue in bulk (up to 1000 messages). Supports two transaction modes: ALL_OR_NOTHING (default, atomic operation) or BEST_EFFORT (partial success allowed)',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      messages: {
-        type: 'array',
-        description: 'Array of messages to post (1-1000 messages)',
-        minItems: 1,
-        maxItems: 1000,
-        items: {
-          type: 'object',
-          properties: {
-            message_id: {
-              type: 'string',
-              description: 'Unique message identifier',
-            },
-            payload: {
-              type: 'object',
-              description: 'Message payload as JSON object',
-            },
-            priority: {
-              type: 'number',
-              minimum: 1,
-              maximum: 10,
-              description: 'Message priority (1-10, default: 5)',
-            },
-            lease_duration: {
-              type: 'string',
-              description: 'Override default lease duration (e.g., "5m")',
-            },
-            schema_id: {
-              type: 'string',
-              description: 'Schema ID for validation (e.g., "user.profile.v1")',
-            },
-            schema_version: {
-              type: 'number',
-              description: 'Schema version number for validation',
-            },
-          },
-          required: ['message_id', 'payload'],
-        },
-      },
-      transaction_mode: {
-        type: 'number',
-        enum: [0, 1],
-        description:
-          'Transaction mode: 0 = ALL_OR_NOTHING (default, all succeed or all fail), 1 = BEST_EFFORT (partial success allowed)',
-        default: 0,
-      },
-    },
-    required: ['queue_name', 'messages'],
-  },
-};
-
-export const getNextMessageTool: Tool = {
-  name: 'get_next_message',
-  description: 'Retrieve the next message from a queue for processing',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      lease_duration: {
-        type: 'string',
-        description: 'Lease duration for the message (e.g., "30s", "5m"). Default: 30s',
-      },
-      exclusivity_key: {
-        type: 'string',
-        description: 'Exclusivity key for exclusive queues',
-      },
-      worker_id: {
-        type: 'string',
-        description: 'Optional stable identifier for the worker/consumer',
-      },
-    },
-    required: ['queue_name'],
-  },
-};
-
-export const peekMessagesTool: Tool = {
-  name: 'peek_messages',
-  description: 'Preview messages in a queue without consuming them',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of messages to peek (default: 10)',
-      },
-      priority_min: {
-        type: 'number',
-        description: 'Minimum priority filter (1-10)',
-      },
-      priority_max: {
-        type: 'number',
-        description: 'Maximum priority filter (1-10)',
-      },
-    },
-    required: ['queue_name'],
-  },
-};
-
-export const acknowledgeMessageTool: Tool = {
-  name: 'acknowledge_message',
-  description: 'Acknowledge message processing completion or failure',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      message_id: {
-        type: 'string',
-        description: 'Message identifier',
-      },
-      status: {
-        type: 'string',
-        enum: ['completed', 'errored'],
-        description: 'Processing status',
-      },
-      worker_id: {
-        type: 'string',
-        description: 'Worker ID that processed the message (from get_next_message)',
-      },
-      attempt_id: {
-        type: 'string',
-        description: 'Attempt ID for this processing attempt (from get_next_message)',
-      },
-    },
-    required: ['queue_name', 'message_id', 'status'],
-  },
-};
-
-export const renewMessageLeaseTool: Tool = {
-  name: 'renew_message_lease',
-  description: 'Extend the lease time for a message being processed',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      message_id: {
-        type: 'string',
-        description: 'Message identifier',
-      },
-      worker_id: { type: 'string', description: 'Worker returned by message acquisition' },
-      attempt_id: { type: 'string', description: 'Attempt returned by message acquisition' },
-      lease_duration: {
-        type: 'string',
-        description: 'New lease duration (e.g., "5m")',
-      },
-    },
-    required: ['queue_name', 'message_id', 'worker_id', 'attempt_id'],
-  },
-};
-
-// Schedule Tools
-export const createScheduleTool: Tool = {
-  name: 'create_schedule',
-  description: 'Create a scheduled task that posts messages automatically',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schedule_id: {
-        type: 'string',
-        description: 'Unique schedule identifier',
-      },
-      queue_name: {
-        type: 'string',
-        description: 'Target queue for scheduled messages',
-      },
-      schedule_type: {
-        type: 'string',
-        enum: ['cron', 'calendar'],
-        description: 'Schedule type',
-      },
-      cron_expression: {
-        type: 'string',
-        description: 'Cron expression (required if schedule_type is cron)',
-      },
-      calendar_type: {
-        type: 'string',
-        enum: ['once', 'weekly', 'daily', 'business_days'],
-        description: 'Calendar type (required if schedule_type is calendar)',
-      },
-      times_of_day: {
-        type: 'array',
-        items: { type: 'string' },
-        description: 'Times of day in HH:MM format (for calendar schedules)',
-      },
-      days_of_week: {
-        type: 'array',
-        items: { type: 'number' },
-        description: 'Days of week (1=Mon, 7=Sun) for weekly schedules',
-      },
-      payload: {
-        type: 'object',
-        description: 'Message payload to post',
-      },
-      priority: {
-        type: 'number',
-        description: 'Message priority (1-10)',
-      },
-      enabled: {
-        type: 'boolean',
-        description: 'Whether schedule is enabled (default: true)',
-      },
-    },
-    required: ['schedule_id', 'queue_name', 'schedule_type', 'payload'],
-  },
-};
-
-export const listSchedulesTool: Tool = {
-  name: 'list_schedules',
-  description: 'List all schedules in the system',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      prefix: {
-        type: 'string',
-        description: 'Filter schedules by ID prefix',
-      },
-    },
-  },
-};
-
-export const deleteScheduleTool: Tool = {
-  name: 'delete_schedule',
-  description: 'Delete a schedule',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schedule_id: {
-        type: 'string',
-        description: 'Schedule identifier to delete',
-      },
-    },
-    required: ['schedule_id'],
-  },
-};
-
-// Additional Message Operations
-export const cancelMessageTool: Tool = {
-  name: 'cancel_message',
-  description: 'Cancel a message before processing',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      queue_name: {
-        type: 'string',
-        description: 'Name of the queue',
-      },
-      message_id: {
-        type: 'string',
-        description: 'Message identifier to cancel',
-      },
-      reason: {
-        type: 'string',
-        description: 'Optional reason for cancellation (for audit/logging)',
-      },
-    },
-    required: ['queue_name', 'message_id'],
-  },
-};
-
-// Additional Schedule Operations
-export const getScheduleTool: Tool = {
-  name: 'get_schedule',
-  description: 'Get details of a specific schedule',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schedule_id: {
-        type: 'string',
-        description: 'Schedule identifier',
-      },
-    },
-    required: ['schedule_id'],
-  },
-};
-
-export const pauseScheduleTool: Tool = {
-  name: 'pause_schedule',
-  description: 'Pause a running schedule',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schedule_id: {
-        type: 'string',
-        description: 'Schedule identifier to pause',
-      },
-    },
-    required: ['schedule_id'],
-  },
-};
-
-export const resumeScheduleTool: Tool = {
-  name: 'resume_schedule',
-  description: 'Resume a paused schedule',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schedule_id: {
-        type: 'string',
-        description: 'Schedule identifier to resume',
-      },
-    },
-    required: ['schedule_id'],
-  },
-};
-
-export const getScheduleHistoryTool: Tool = {
-  name: 'get_schedule_history',
-  description: 'Get execution history for a schedule',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schedule_id: {
-        type: 'string',
-        description: 'Schedule identifier',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of history entries to return',
-      },
-    },
-    required: ['schedule_id'],
-  },
-};
-
-// Dead Letter Queue Operations
-export const getDLQMessagesTool: Tool = {
-  name: 'get_dlq_messages',
-  description: 'Get messages from a dead letter queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      dlq_name: {
-        type: 'string',
-        description: 'Name of the dead letter queue',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of messages to retrieve (default: 10)',
-      },
-    },
-    required: ['dlq_name'],
-  },
-};
-
-export const requeueFromDLQTool: Tool = {
-  name: 'requeue_from_dlq',
-  description: 'Requeue a message from DLQ to an explicit target queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      dlq_name: {
-        type: 'string',
-        description: 'Name of the dead letter queue',
-      },
-      message_id: {
-        type: 'string',
-        description: 'Message identifier to requeue',
-      },
-      target_queue: {
-        type: 'string',
-        description: 'Required destination queue name',
-      },
-    },
-    required: ['dlq_name', 'message_id', 'target_queue'],
-  },
-};
-
-export const deleteFromDLQTool: Tool = {
-  name: 'delete_from_dlq',
-  description: 'Permanently delete a message from a dead letter queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      dlq_name: {
-        type: 'string',
-        description: 'Name of the dead letter queue',
-      },
-      message_id: {
-        type: 'string',
-        description: 'Message identifier to delete',
-      },
-    },
-    required: ['dlq_name', 'message_id'],
-  },
-};
-
-export const purgeDLQTool: Tool = {
-  name: 'purge_dlq',
-  description: 'Purge all messages from a dead letter queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      dlq_name: {
-        type: 'string',
-        description: 'Name of the dead letter queue to purge',
-      },
-    },
-    required: ['dlq_name'],
-  },
-};
-
-export const getDLQStatsTool: Tool = {
-  name: 'get_dlq_stats',
-  description: 'Get statistics for a dead letter queue',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      dlq_name: {
-        type: 'string',
-        description: 'Name of the dead letter queue',
-      },
-    },
-    required: ['dlq_name'],
-  },
-};
-
-// Additional Schema Operations
-export const getSchemaTool: Tool = {
-  name: 'get_schema',
-  description: 'Get a specific schema version',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schema_id: {
-        type: 'string',
-        description: 'Schema identifier',
-      },
-      version: {
-        type: 'number',
-        description: 'Schema version (0 = latest)',
-      },
-    },
-    required: ['schema_id'],
-  },
-};
-
-export const listSchemasTool: Tool = {
-  name: 'list_schemas',
-  description: 'List all registered schemas',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      prefix: {
-        type: 'string',
-        description: 'Filter by schema_id prefix',
-      },
-      limit: {
-        type: 'number',
-        description: 'Maximum number of results (default: 100)',
-      },
-      active_only: {
-        type: 'boolean',
-        description: 'Only return active schemas',
-      },
-    },
-  },
-};
-
-export const deleteSchemaTool: Tool = {
-  name: 'delete_schema',
-  description: 'Delete a schema or specific version',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schema_id: {
-        type: 'string',
-        description: 'Schema identifier to delete',
-      },
-      version: {
-        type: 'number',
-        description: 'Schema version to delete (0 = delete all versions)',
-      },
-    },
-    required: ['schema_id'],
-  },
-};
-
-export const validatePayloadTool: Tool = {
-  name: 'validate_payload',
-  description: 'Validate a JSON payload against a schema',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schema_id: {
-        type: 'string',
-        description: 'Schema identifier to validate against',
-      },
-      version: {
-        type: 'number',
-        description: 'Schema version (0 = latest)',
-      },
-      payload: {
-        type: 'string',
-        description: 'JSON payload to validate',
-      },
-    },
-    required: ['schema_id', 'payload'],
-  },
-};
-
-// Schema Management Tools
-export const registerSchemaTool: Tool = {
-  name: 'register_schema',
-  description: 'Register a JSON schema for message validation',
-  inputSchema: {
-    type: 'object',
-    properties: {
-      schema_id: {
-        type: 'string',
-        description: 'Unique schema identifier (e.g., "user.profile.v1")',
-      },
-      name: {
-        type: 'string',
-        description: 'Human-readable schema name',
-      },
-      description: {
-        type: 'string',
-        description: 'Schema description',
-      },
-      content: {
-        type: 'string',
-        description: 'JSON Schema content as a JSON string',
-      },
-      content_type: {
-        type: 'string',
-        description: 'Schema type (default: "json-schema")',
-      },
-    },
-    required: ['schema_id', 'name', 'content'],
-  },
-};
-
-// Export all tools
-export const allTools: Tool[] = [
-  // Queue management
-  createQueueTool,
-  deleteQueueTool,
-  listQueuesTool,
-  getQueueStateTool,
-  // Message operations
-  postMessageTool,
-  postMessagesBulkTool,
-  getNextMessageTool,
-  peekMessagesTool,
-  acknowledgeMessageTool,
-  renewMessageLeaseTool,
-  cancelMessageTool,
-  // Scheduling
-  createScheduleTool,
-  listSchedulesTool,
-  deleteScheduleTool,
-  getScheduleTool,
-  pauseScheduleTool,
-  resumeScheduleTool,
-  getScheduleHistoryTool,
-  // Dead letter queue
-  getDLQMessagesTool,
-  requeueFromDLQTool,
-  deleteFromDLQTool,
-  purgeDLQTool,
-  getDLQStatsTool,
-  // Schema management
-  registerSchemaTool,
-  getSchemaTool,
-  listSchemasTool,
-  deleteSchemaTool,
-  validatePayloadTool,
-];
+}));
