@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { QueueService } from "@nzovu/proto";
 import * as grpc from "@grpc/grpc-js";
 import { NzovuError, ConnectionOptions, ErrorCode, RpcOptions } from "./types";
@@ -44,6 +45,13 @@ export enum ConnectionState {
 }
 
 export class Connection {
+  private readonly callContext = new AsyncLocalStorage<RpcOptions>();
+  runWithOptions<T>(
+    options: RpcOptions,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return this.callContext.run(options, operation);
+  }
   private client?: InstanceType<typeof QueueService.QueueServiceClient>;
   private state = ConnectionState.DISCONNECTED;
   private connecting?: Promise<void>;
@@ -256,6 +264,11 @@ export class Connection {
     request: Request<K>,
     options: RpcOptions = {},
   ): Promise<Response<K>> {
+    const context = this.callContext.getStore();
+    const signals = [context?.signal, options.signal].filter(
+      (signal): signal is AbortSignal => signal !== undefined,
+    );
+    options = { ...context, ...options };
     const timeout = options.timeoutMs ?? this.requestTimeout;
     integer(timeout, "timeoutMs", 1);
     if (!this.isConnected() || !this.client)
@@ -285,7 +298,8 @@ export class Connection {
         clearTimeout(deadlineTimer);
         if (retryTimer) clearTimeout(retryTimer);
         this.pending.delete(cancel);
-        options.signal?.removeEventListener("abort", cancel);
+        for (const signal of signals)
+          signal.removeEventListener("abort", cancel);
         if (error) reject(handleGrpcError(error));
         else resolve(response!);
       };
@@ -300,7 +314,8 @@ export class Connection {
         call?.cancel();
       }, timeout);
       this.pending.add(cancel);
-      options.signal?.addEventListener("abort", cancel, { once: true });
+      for (const signal of signals)
+        signal.addEventListener("abort", cancel, { once: true });
       const run = () => {
         if (done) return;
         const metadata = new grpc.Metadata();
@@ -347,7 +362,7 @@ export class Connection {
           finish(error as Error);
         }
       };
-      if (options.signal?.aborted) cancel();
+      if (signals.some((signal) => signal.aborted)) cancel();
       else run();
     });
   }

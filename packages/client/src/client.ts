@@ -5,7 +5,7 @@ import { MessageClient } from "./message";
 import { QueueClient } from "./queue";
 import { ScheduleClient } from "./schedule";
 import { SchemaClient } from "./schema";
-import { ClientConfig } from "./types";
+import { ClientConfig, RpcOptions } from "./types";
 
 /**
  * Main Nzovu client
@@ -43,6 +43,13 @@ export class NzovuClient {
    */
   get workerId(): string | undefined {
     return this._workerId;
+  }
+
+  runWithOptions<T>(
+    options: RpcOptions,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    return this.connection.runWithOptions(options, operation);
   }
 
   /**

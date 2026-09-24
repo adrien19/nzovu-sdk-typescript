@@ -96,7 +96,7 @@ See the [client API](packages/client/README.md) for deadlines and lease ownershi
 After building, start the stdio server locally:
 
 ```sh
-NZOVU_ADDRESS=localhost:9000 pnpm --filter @nzovu/mcp-server start
+NZOVU_ADDRESS=localhost:9000 NZOVU_INSECURE=true pnpm --filter @nzovu/mcp-server start
 ```
 
 MCP configuration uses `NZOVU_*` environment variables. See

@@ -1,163 +1,112 @@
-/**
- * Unit tests for tool definitions
- */
-
 import { describe, expect, it } from 'vitest';
-import { allTools } from '../tools/index';
+import { QueueServiceTypes } from '@nzovu/client';
+import { allTools, definitions } from '../tools/index.js';
+import { toolSchemas } from '../tools/validation.js';
+import { loadConfig } from '../config.js';
 
-describe('Tool Definitions', () => {
-  describe('Tool Registry', () => {
-    it('should export all 28 tools', () => {
-      expect(allTools).toHaveLength(28);
-    });
-
-    it('should have unique tool names', () => {
-      const names = allTools.map((tool) => tool.name);
-      const uniqueNames = new Set(names);
-      expect(uniqueNames.size).toBe(names.length);
-    });
-
-    it('should include all queue management tools', () => {
-      const names = allTools.map((tool) => tool.name);
-      expect(names).toContain('create_queue');
-      expect(names).toContain('delete_queue');
-      expect(names).toContain('list_queues');
-      expect(names).toContain('get_queue_state');
-    });
-
-    it('should include all message operation tools', () => {
-      const names = allTools.map((tool) => tool.name);
-      expect(names).toContain('post_message');
-      expect(names).toContain('post_messages_bulk');
-      expect(names).toContain('get_next_message');
-      expect(names).toContain('peek_messages');
-      expect(names).toContain('acknowledge_message');
-      expect(names).toContain('renew_message_lease');
-    });
-
-    it('should include all schedule tools', () => {
-      const names = allTools.map((tool) => tool.name);
-      expect(names).toContain('create_schedule');
-      expect(names).toContain('list_schedules');
-      expect(names).toContain('delete_schedule');
-    });
-
-    it('should include schema management tool', () => {
-      const names = allTools.map((tool) => tool.name);
-      expect(names).toContain('register_schema');
-    });
+describe('canonical tool definitions', () => {
+  it('has 31 distinct tools and RPCs', () => {
+    expect(allTools).toHaveLength(31);
+    expect(new Set(allTools.map((tool) => tool.name)).size).toBe(31);
+    expect(new Set(Object.values(definitions).map((tool) => tool.rpc)).size).toBe(31);
+    expect(Object.keys(toolSchemas).sort()).toEqual(allTools.map((tool) => tool.name).sort());
+    expect(QueueServiceTypes.PreviewCalendarScheduleRequest).toBeDefined();
   });
-
-  describe('Tool Input Schemas', () => {
-    it('should have valid input schema for each tool', () => {
-      allTools.forEach((tool) => {
-        expect(tool.inputSchema).toBeDefined();
-        expect(tool.inputSchema.type).toBe('object');
-        expect(tool.inputSchema.properties).toBeDefined();
-      });
-    });
-
-    it('create_queue should have required queue_name', () => {
-      const tool = allTools.find((t) => t.name === 'create_queue');
-      expect(tool?.inputSchema.required).toContain('queue_name');
-    });
-
-    it('post_message should have required fields', () => {
-      const tool = allTools.find((t) => t.name === 'post_message');
-      expect(tool?.inputSchema.required).toContain('queue_name');
-      expect(tool?.inputSchema.required).toContain('message_id');
-      expect(tool?.inputSchema.required).toContain('payload');
-    });
-
-    it('post_message should have optional schema fields', () => {
-      const tool = allTools.find((t) => t.name === 'post_message');
-      expect(tool?.inputSchema.properties).toBeDefined();
-      expect((tool?.inputSchema.properties as any).schema_id).toBeDefined();
-      expect((tool?.inputSchema.properties as any).schema_version).toBeDefined();
-    });
-
-    it('acknowledge_message should have required fields', () => {
-      const tool = allTools.find((t) => t.name === 'acknowledge_message');
-      expect(tool?.inputSchema.required).toContain('queue_name');
-      expect(tool?.inputSchema.required).toContain('message_id');
-      expect(tool?.inputSchema.required).toContain('status');
-      // worker_id and attempt_id are optional (can be retrieved from heartbeat context)
-      expect(tool?.inputSchema.properties).toHaveProperty('worker_id');
-      expect(tool?.inputSchema.properties).toHaveProperty('attempt_id');
-    });
-
-    it('create_schedule should have required fields', () => {
-      const tool = allTools.find((t) => t.name === 'create_schedule');
-      expect(tool?.inputSchema.required).toContain('schedule_id');
-      expect(tool?.inputSchema.required).toContain('queue_name');
-      expect(tool?.inputSchema.required).toContain('schedule_type');
-      expect(tool?.inputSchema.required).toContain('payload');
-    });
-
-    it('register_schema should have required fields', () => {
-      const tool = allTools.find((t) => t.name === 'register_schema');
-      expect(tool?.inputSchema.required).toContain('schema_id');
-      expect(tool?.inputSchema.required).toContain('name');
-      expect(tool?.inputSchema.required).toContain('content');
-    });
+  it('marks reads and destructive operations accurately', () => {
+    expect(
+      allTools.find((tool) => tool.name === 'get_next_message')?.annotations?.readOnlyHint
+    ).toBe(false);
+    expect(allTools.find((tool) => tool.name === 'purge_dlq')?.annotations?.destructiveHint).toBe(
+      true
+    );
+    expect(allTools.find((tool) => tool.name === 'list_schemas')?.annotations?.idempotentHint).toBe(
+      true
+    );
   });
-
-  describe('Tool Descriptions', () => {
-    it('should have non-empty descriptions', () => {
-      allTools.forEach((tool) => {
-        expect(tool.description).toBeDefined();
-        expect(tool.description?.length).toBeGreaterThan(0);
-      });
-    });
-
-    it('should have descriptive property descriptions', () => {
-      allTools.forEach((tool) => {
-        const properties = tool.inputSchema.properties;
-        if (properties) {
-          Object.values(properties).forEach((prop: any) => {
-            if (prop.description) {
-              expect(prop.description.length).toBeGreaterThan(0);
-            }
-          });
-        }
-      });
-    });
+  it('requires exact ownership and an explicit DLQ target', () => {
+    for (const name of ['acknowledge_message', 'send_message_heartbeat', 'renew_message_lease']) {
+      expect(allTools.find((tool) => tool.name === name)?.inputSchema.required).toEqual(
+        expect.arrayContaining(['workerId', 'attemptId'])
+      );
+    }
+    expect(
+      allTools.find((tool) => tool.name === 'requeue_from_dlq')?.inputSchema.required
+    ).toContain('targetQueue');
   });
-
-  describe('Tool Parameter Types', () => {
-    it('priority should be a number with range 1-10', () => {
-      const tool = allTools.find((t) => t.name === 'post_message');
-      const priority = (tool?.inputSchema.properties as any)?.priority;
-      expect(priority.type).toBe('number');
-      expect(priority.minimum).toBe(1);
-      expect(priority.maximum).toBe(10);
-    });
-
-    it('payload should be an object', () => {
-      const tool = allTools.find((t) => t.name === 'post_message');
-      const payload = (tool?.inputSchema.properties as any)?.payload;
-      expect(payload.type).toBe('object');
-    });
-
-    it('status should be an enum', () => {
-      const tool = allTools.find((t) => t.name === 'acknowledge_message');
-      const status = (tool?.inputSchema.properties as any)?.status;
-      expect(status.enum).toEqual(['completed', 'errored']);
-    });
-
-    it('schedule_type should be an enum', () => {
-      const tool = allTools.find((t) => t.name === 'create_schedule');
-      const scheduleType = (tool?.inputSchema.properties as any)?.schedule_type;
-      expect(scheduleType.enum).toEqual(['cron', 'calendar']);
-    });
+  it.each([-1, 1001, 1.5])('rejects invalid page size %s', (pageSize) =>
+    expect(() => toolSchemas.list_queues.parse({ pageSize })).toThrow()
+  );
+  it.each(['5', '-1', 2, 'bad'])('rejects invalid priority %s', (priority) =>
+    expect(() =>
+      toolSchemas.post_message.parse({
+        queueName: 'q',
+        message: { messageId: 'm', metadata: { priority } },
+      })
+    ).toThrow()
+  );
+  it('preserves zero priority and rejects runtime fields and legacy inputs', () => {
+    expect(
+      toolSchemas.post_message.parse({
+        queueName: 'q',
+        message: { messageId: 'm', metadata: { priority: '0' } },
+      }).message.metadata.priority
+    ).toBe('0');
+    expect(() =>
+      toolSchemas.post_message.parse({
+        queueName: 'q',
+        message: { messageId: 'm', metadata: { state: 1 } },
+      })
+    ).toThrow();
+    expect(() => toolSchemas.list_queues.parse({ limit: 10 })).toThrow();
+    expect(() => toolSchemas.get_next_message.parse({ queue_name: 'q' })).toThrow();
+  });
+  it('keeps BEST_EFFORT validation on the server', () => {
+    expect(
+      toolSchemas.post_messages_bulk.parse({
+        queueName: 'q',
+        transactionMode: 1,
+        messages: [{ messageId: 'bad id', metadata: { priority: '5' } }],
+      }).messages
+    ).toHaveLength(1);
+  });
+  it.each(['x-nzovu-private', 'x-internal-private', 'x-system-private', 'UPPER'])(
+    'rejects reserved/invalid headers %s',
+    (key) =>
+      expect(() =>
+        toolSchemas.post_message.parse({
+          queueName: 'q',
+          message: { messageId: 'm', metadata: { headers: [{ key, value: '' }] } },
+        })
+      ).toThrow()
+  );
+  it('rejects invalid base64, fractional timestamps and malformed int64', () => {
+    for (const metadata of [
+      { headers: [{ key: 'x', value: 'invalid!' }] },
+      { scheduledTime: { seconds: 'abc', nanos: 0 } },
+      { scheduledTime: { seconds: '1', nanos: 0.5 } },
+    ])
+      expect(() =>
+        toolSchemas.post_message.parse({ queueName: 'q', message: { messageId: 'm', metadata } })
+      ).toThrow();
   });
 });
-
-it('advertises required lease ownership and DLQ destination', () => {
-  const renew = allTools.find((tool) => tool.name === 'renew_message_lease')!;
-  expect(renew.inputSchema.required).toEqual(expect.arrayContaining(['worker_id', 'attempt_id']));
-  expect(renew.inputSchema.properties).toHaveProperty('worker_id');
-  expect(renew.inputSchema.properties).toHaveProperty('attempt_id');
-  const requeue = allTools.find((tool) => tool.name === 'requeue_from_dlq')!;
-  expect(requeue.inputSchema.required).toContain('target_queue');
+describe('environment configuration', () => {
+  it('defaults to TLS and permits standalone custom CA', () => {
+    expect(loadConfig({}).insecure).toBe(false);
+    expect(loadConfig({ NZOVU_CA_PATH: '/ca.pem' }).caPath).toBe('/ca.pem');
+  });
+  it.each([
+    { NZOVU_INSECURE: 'yes' },
+    { NZOVU_TIMEOUT: '0s' },
+    { NZOVU_TIMEOUT: '1ns' },
+    { NZOVU_TIMEOUT: 'Infinity' },
+    { NZOVU_TIMEOUT: '2147483648ms' },
+    { NZOVU_CERT_PATH: '/cert' },
+    { NZOVU_KEY_PATH: '/key' },
+    { NZOVU_INSECURE: 'true', NZOVU_CA_PATH: '/ca' },
+    { NZOVU_ADDRESS: '' },
+    { NZOVU_API_KEY: '' },
+    { NZOVU_API_KEY: '\nsecret' },
+    { NZOVU_MAX_MANAGED_CLAIMS: '1.5' },
+  ])('rejects invalid configuration %j', (env) => expect(() => loadConfig(env)).toThrow());
 });

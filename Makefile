@@ -108,8 +108,8 @@ test-client: build-client
 		echo "$(YELLOW)Client package not yet implemented, skipping tests$(NC)"; \
 	fi
 
-# Test mcp package (depends on build-client for lib files)
-test-mcp: build-client
+# Test MCP source and built stdio executable
+test-mcp: build-mcp
 	@if [ -d "packages/mcp" ] && [ -f "packages/mcp/package.json" ]; then \
 		echo "$(YELLOW)Testing mcp package...$(NC)"; \
 		cd packages/mcp && $(PNPM) test && echo "$(GREEN)mcp tests passed!$(NC)"; \
