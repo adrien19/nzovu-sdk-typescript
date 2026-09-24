@@ -376,8 +376,8 @@ describe("Connection", () => {
       jest.advanceTimersByTime(200);
       await Promise.resolve();
 
-      // A new client should have been created
-      expect(clientInstance).toBeGreaterThan(initialClientCount);
+      // The gRPC channel reconnects without replacing active calls
+      expect(clientInstance).toBe(initialClientCount);
     });
   });
 });

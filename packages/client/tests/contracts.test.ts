@@ -232,7 +232,11 @@ const contracts: Contract[] = [
       workerId: "w",
       attemptId: "a",
     }),
-    project: (r) => ({ ...r, stopHeartbeat: undefined }),
+    project: (r) => ({
+      ...r,
+      claim: { queueName: "q", messageId: "m", workerId: "w", attemptId: "a" },
+      stopHeartbeat: undefined,
+    }),
   },
   {
     rpc: "acknowledgeMessage",

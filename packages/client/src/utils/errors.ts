@@ -5,28 +5,8 @@ import { NzovuError, ErrorCode } from "../types";
  * Convert gRPC status code to Nzovu error code
  */
 export function grpcStatusToErrorCode(status: grpc.status): ErrorCode {
-  switch (status) {
-    case grpc.status.INVALID_ARGUMENT:
-      return ErrorCode.INVALID_ARGUMENT;
-    case grpc.status.NOT_FOUND:
-      return ErrorCode.NOT_FOUND;
-    case grpc.status.ALREADY_EXISTS:
-      return ErrorCode.ALREADY_EXISTS;
-    case grpc.status.PERMISSION_DENIED:
-    case grpc.status.UNAUTHENTICATED:
-      return ErrorCode.PERMISSION_DENIED;
-    case grpc.status.RESOURCE_EXHAUSTED:
-      return ErrorCode.RESOURCE_EXHAUSTED;
-    case grpc.status.UNAVAILABLE:
-      return ErrorCode.UNAVAILABLE;
-    case grpc.status.DEADLINE_EXCEEDED:
-      return ErrorCode.DEADLINE_EXCEEDED;
-    case grpc.status.INTERNAL:
-    case grpc.status.DATA_LOSS:
-    case grpc.status.UNKNOWN:
-    default:
-      return ErrorCode.INTERNAL;
-  }
+  const name = grpc.status[status] as keyof typeof ErrorCode;
+  return ErrorCode[name] ?? ErrorCode.UNKNOWN;
 }
 
 /**
@@ -41,7 +21,14 @@ export function handleGrpcError(error: Error): NzovuError {
 
   if (grpcError.code !== undefined) {
     const code = grpcStatusToErrorCode(grpcError.code);
-    return new NzovuError(code, grpcError.details || grpcError.message, error);
+    return new NzovuError(
+      code,
+      grpcError.details ?? grpcError.message,
+      error,
+      grpcError.code,
+      grpcError.details,
+      grpcError.metadata?.clone(),
+    );
   }
 
   return new NzovuError(ErrorCode.INTERNAL, error.message, error);

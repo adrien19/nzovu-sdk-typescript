@@ -9,7 +9,11 @@ this workspace. See the root README for local setup and validation commands.
 import { NzovuClient, Message, Queue, parseDuration } from "@nzovu/client";
 
 const client = new NzovuClient({
-  connection: { address: "localhost:9000", retry: { enabled: false } },
+  connection: {
+    address: "localhost:9000",
+    insecure: true,
+    retry: { enabled: false },
+  },
 });
 await client.connect();
 try {
@@ -162,12 +166,42 @@ that resolve to whole nanoseconds. `durationToMs()` explicitly truncates
 submillisecond precision; `msToDuration()` requires safe integer milliseconds.
 Both validate protobuf duration bounds.
 
-RPC failures reject with `NzovuError`, mapped error code and original cause.
-Server validation remains authoritative for database-dependent rules, calendar
-semantics and JSON Schema validation. Connection defaults to plaintext; custom TLS
-credentials can be supplied through `connection.credentials`. Built-in API-key
-metadata and per-request deadline enforcement are not yet available. Disable
-retries for mutations whose outcome is ambiguous; do not replay acquired claims.
+RPC failures reject with `NzovuError`: `code`, exact numeric `grpcCode`, `details`,
+cloned `trailers`, and original `cause`. Server validation remains authoritative.
+
+## Transport and ownership
+
+TLS is the default. Set `connection.insecure: true` explicitly for plaintext.
+`connection.tls` accepts PEM buffers `{ ca, cert, key }`: custom CA works without
+client certificates; cert/key must be supplied together for mTLS. Explicit gRPC
+`credentials` cannot be mixed with `tls` or `insecure`. `connection.apiKey` adds
+`api-key` metadata to every RPC. Credentials are never logged by the client.
+
+`requestTimeout` defaults to 30000 ms and covers each RPC plus retry backoff.
+Only read-only RPCs retry UNAVAILABLE; acquisitions and mutations run once.
+Underlying gRPC retries are disabled. `Connection.invoke(method, request, options)`
+also accepts `timeoutMs` and `AbortSignal`. `maxInFlight` defaults to 1000 and bounds
+both calls and retry waits. Health checks observe the gRPC channel; channel
+reconnection preserves active-call ownership instead of replacing clients.
+
+Acquisition returns an immutable `claim` containing queue, message, worker and
+attempt IDs, even with automatic heartbeat disabled. ACK, heartbeat and renewal
+require explicit worker/attempt IDs; no newer claim is substituted implicitly.
+`hasActiveHeartbeat`, `getHeartbeatHealth`, `stopHeartbeat` and `releaseClaim` take
+the complete claim. Stopping heartbeat retains manual ownership tracking;
+`releaseClaim` forgets local tracking without changing server state.
+
+`maxManagedClaims` defaults to 1000, including pending acquisitions. Release or ACK
+claims to free capacity. Automatic heartbeats never overlap and coalesce with
+manual heartbeats for managed claims. They stop after confirmed ACK, terminal
+ownership loss, or three consecutive failures. Renewal exhaustion alone retains
+heartbeat ownership. Transient ACK failure leaves heartbeat running. Failure
+callbacks are isolated; inspect health after automatic monitoring stops.
+
+`disconnect()` cancels calls/retry waits/heartbeats and drains claim operations.
+Late responses cannot recreate claims. Server leases still govern crash recovery;
+processing remains at least once. A transport timeout on a mutation has an
+ambiguous outcome and must not be blindly replayed.
 
 ## License
 

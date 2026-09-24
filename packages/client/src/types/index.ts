@@ -41,8 +41,14 @@ export interface HealthCheckOptions {
 export interface ConnectionOptions {
   /** Server address (e.g., 'localhost:9000') */
   address: string;
+  /** TLS is the default. Plaintext must be explicitly enabled. */
+  insecure?: boolean;
+  tls?: { ca?: Buffer; cert?: Buffer; key?: Buffer };
+  apiKey?: string;
+  /** Maximum concurrent RPCs, including retry backoff (default: 1000). */
+  maxInFlight?: number;
 
-  /** gRPC credentials (default: insecure) */
+  /** Explicit gRPC credentials; mutually exclusive with insecure/tls. */
   credentials?: grpc.ChannelCredentials;
 
   /** gRPC channel options */
@@ -73,6 +79,8 @@ export interface ClientConfig {
 
   /** Default request timeout in milliseconds (default: 30000) */
   requestTimeout?: number;
+  /** Maximum outstanding acquired claims, including acquisitions in flight. */
+  maxManagedClaims?: number;
 
   /** Optional stable identifier for this worker/consumer instance.
    *  If provided, this workerId will be used in all message operations. */
@@ -94,6 +102,15 @@ export enum ErrorCode {
   PERMISSION_DENIED = "PERMISSION_DENIED",
   RESOURCE_EXHAUSTED = "RESOURCE_EXHAUSTED",
 
+  CANCELLED = "CANCELLED",
+  UNKNOWN = "UNKNOWN",
+  UNAUTHENTICATED = "UNAUTHENTICATED",
+  FAILED_PRECONDITION = "FAILED_PRECONDITION",
+  ABORTED = "ABORTED",
+  OUT_OF_RANGE = "OUT_OF_RANGE",
+  UNIMPLEMENTED = "UNIMPLEMENTED",
+  DATA_LOSS = "DATA_LOSS",
+
   // Server errors
   INTERNAL = "INTERNAL",
   UNAVAILABLE = "UNAVAILABLE",
@@ -112,9 +129,18 @@ export class NzovuError extends Error {
     public code: ErrorCode,
     message: string,
     public cause?: Error,
+    public grpcCode?: grpc.status,
+    public details?: string,
+    public trailers?: grpc.Metadata,
   ) {
     super(message);
     this.name = "NzovuError";
     Object.setPrototypeOf(this, NzovuError.prototype);
   }
+}
+
+export interface RpcOptions {
+  /** Total deadline budget, including retries and backoff. */
+  timeoutMs?: number;
+  signal?: AbortSignal;
 }

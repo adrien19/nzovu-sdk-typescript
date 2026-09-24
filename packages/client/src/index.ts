@@ -6,7 +6,7 @@ export { NzovuClient } from "./client";
 export { Connection, ConnectionState } from "./connection";
 export { DLQClient, type DLQStats } from "./dlq";
 export { MessageClient } from "./message";
-export type { HeartbeatHealth } from "./message";
+export type { HeartbeatHealth, LeaseClaim } from "./message";
 export { QueueClient } from "./queue";
 export { ScheduleClient } from "./schedule";
 export { SchemaClient } from "./schema";
@@ -17,6 +17,7 @@ export {
   ErrorCode,
   type HealthCheckOptions,
   type RetryOptions,
+  type RpcOptions,
 } from "./types";
 
 // Re-export logger types

@@ -21,13 +21,18 @@ export class NzovuClient {
   public readonly dlq: DLQClient;
 
   constructor(config: ClientConfig) {
-    this.connection = new Connection(config.connection);
+    this.connection = new Connection(config.connection, config.requestTimeout);
     this._workerId = config.workerId;
 
     const logger = config.logger || defaultLogger;
 
     this.queues = new QueueClient(this.connection);
-    this.messages = new MessageClient(this.connection, config.workerId, logger);
+    this.messages = new MessageClient(
+      this.connection,
+      config.workerId,
+      logger,
+      config.maxManagedClaims,
+    );
     this.schedules = new ScheduleClient(this.connection);
     this.schemas = new SchemaClient(this.connection);
     this.dlq = new DLQClient(this.connection);
@@ -54,6 +59,7 @@ export class NzovuClient {
     // Stop all active heartbeats before disconnecting
     this.messages.stopAllHeartbeats();
     await this.connection.disconnect();
+    await this.messages.drain();
   }
 
   /**
