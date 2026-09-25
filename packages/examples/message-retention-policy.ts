@@ -5,17 +5,15 @@
  * for audit trails, compliance, and debugging purposes.
  */
 
-import {
-  NzovuClient,
-  Message,
-  MessageRetentionPolicy_Mode,
-  Queue,
-  type MessageRetentionPolicy,
-} from "@nzovu/client";
+import { NzovuClient, Message, Queue } from "@nzovu/client";
 
 async function main() {
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
   });
   await client.connect();
 
@@ -34,23 +32,26 @@ async function main() {
   console.log("   Storage: Minimal - no retention overhead\n");
 
   try {
-    await client.queues.createQueue("ephemeral-tasks", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      leaseDuration: { seconds: "30", nanos: 0 },
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "ephemeral-tasks-dlq",
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: false,
-      allowedContentTypes: ["application/json"],
-      // Default retention: DELETE_IMMEDIATELY (no need to specify)
-      messageRetentionPolicy: {
-        mode: MessageRetentionPolicy_Mode.DELETE_IMMEDIATELY,
-        retentionSeconds: "0", // Ignored for DELETE_IMMEDIATELY
-      },
-    });
+    await client.queues.createQueue(
+      "ephemeral-tasks",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        leaseDuration: { seconds: "30", nanos: 0 },
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "ephemeral-tasks-dlq",
+        maxPayloadSize: 0,
+        schemaId: "",
+        schemaRequired: false,
+        allowedContentTypes: ["application/json"],
+        // Default retention: DELETE_IMMEDIATELY (no need to specify)
+        messageRetentionPolicy: {
+          mode: Queue.MessageRetentionPolicy_Mode.DELETE_IMMEDIATELY,
+          retentionSeconds: "0", // Ignored for DELETE_IMMEDIATELY
+        },
+      }),
+    );
     console.log('✅ Queue "ephemeral-tasks" created (DELETE_IMMEDIATELY)\n');
   } catch (err: any) {
     if (err?.message && /already exists/i.test(err.message)) {
@@ -61,25 +62,23 @@ async function main() {
   }
 
   // Post a sample message
-  await client.messages.postMessage("ephemeral-tasks", {
-    messageId: `ephemeral-${Date.now()}`,
-    metadata: {
-      payload: {
-        data: { task: "temporary-calculation", value: 42 },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+  await client.messages.postMessage(
+    "ephemeral-tasks",
+    Message.Message.fromPartial({
+      messageId: `ephemeral-${Date.now()}`,
+      metadata: {
+        payload: {
+          data: { task: "temporary-calculation", value: 42 },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
+        },
+        priority: "2",
+        maxAttempts: 3,
       },
-      priority: "50",
-      maxAttempts: 3,
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log(
     "📤 Posted ephemeral message (will be deleted after processing)\n",
   );
@@ -98,25 +97,28 @@ async function main() {
 
   const thirtyDaysInSeconds = 30 * 24 * 60 * 60; // 2,592,000 seconds
 
-  const auditRetentionPolicy: MessageRetentionPolicy = {
-    mode: MessageRetentionPolicy_Mode.RETAIN_DURATION,
+  const auditRetentionPolicy: Queue.MessageRetentionPolicy = {
+    mode: Queue.MessageRetentionPolicy_Mode.RETAIN_DURATION,
     retentionSeconds: thirtyDaysInSeconds.toString(),
   };
 
   try {
-    await client.queues.createQueue("order-processing", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      leaseDuration: { seconds: "120", nanos: 0 },
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "order-processing-dlq",
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: false,
-      allowedContentTypes: ["application/json"],
-      messageRetentionPolicy: auditRetentionPolicy,
-    });
+    await client.queues.createQueue(
+      "order-processing",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        leaseDuration: { seconds: "120", nanos: 0 },
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "order-processing-dlq",
+        maxPayloadSize: 0,
+        schemaId: "",
+        schemaRequired: false,
+        allowedContentTypes: ["application/json"],
+        messageRetentionPolicy: auditRetentionPolicy,
+      }),
+    );
     console.log('✅ Queue "order-processing" created (30-day retention)\n');
   } catch (err: any) {
     if (err?.message && /already exists/i.test(err.message)) {
@@ -127,30 +129,28 @@ async function main() {
   }
 
   // Post a sample order message
-  await client.messages.postMessage("order-processing", {
-    messageId: `order-${Date.now()}`,
-    metadata: {
-      payload: {
-        data: {
-          orderId: "ORD-12345",
-          customerId: "CUST-789",
-          amount: 299.99,
-          items: ["Product A", "Product B"],
+  await client.messages.postMessage(
+    "order-processing",
+    Message.Message.fromPartial({
+      messageId: `order-${Date.now()}`,
+      metadata: {
+        payload: {
+          data: {
+            orderId: "ORD-12345",
+            customerId: "CUST-789",
+            amount: 299.99,
+            items: ["Product A", "Product B"],
+          },
+          metadata: { correlationId: "trace-xyz-123" },
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: { correlationId: "trace-xyz-123" },
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "4",
+        maxAttempts: 3,
       },
-      priority: "100",
-      maxAttempts: 3,
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log(
     "📤 Posted order message (retained for 30 days after completion)\n",
   );
@@ -165,25 +165,28 @@ async function main() {
 
   const sevenDaysInSeconds = 7 * 24 * 60 * 60; // 604,800 seconds
 
-  const debugRetentionPolicy: MessageRetentionPolicy = {
-    mode: MessageRetentionPolicy_Mode.RETAIN_DURATION,
+  const debugRetentionPolicy: Queue.MessageRetentionPolicy = {
+    mode: Queue.MessageRetentionPolicy_Mode.RETAIN_DURATION,
     retentionSeconds: sevenDaysInSeconds.toString(),
   };
 
   try {
-    await client.queues.createQueue("webhook-deliveries", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 5,
-      leaseDuration: { seconds: "60", nanos: 0 },
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "webhook-deliveries-dlq",
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: false,
-      allowedContentTypes: ["application/json"],
-      messageRetentionPolicy: debugRetentionPolicy,
-    });
+    await client.queues.createQueue(
+      "webhook-deliveries",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 5,
+        leaseDuration: { seconds: "60", nanos: 0 },
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "webhook-deliveries-dlq",
+        maxPayloadSize: 0,
+        schemaId: "",
+        schemaRequired: false,
+        allowedContentTypes: ["application/json"],
+        messageRetentionPolicy: debugRetentionPolicy,
+      }),
+    );
     console.log('✅ Queue "webhook-deliveries" created (7-day retention)\n');
   } catch (err: any) {
     if (err?.message && /already exists/i.test(err.message)) {
@@ -193,29 +196,27 @@ async function main() {
     }
   }
 
-  await client.messages.postMessage("webhook-deliveries", {
-    messageId: `webhook-${Date.now()}`,
-    metadata: {
-      payload: {
-        data: {
-          url: "https://api.example.com/webhook",
-          event: "order.created",
-          payload: { orderId: "ORD-12345" },
+  await client.messages.postMessage(
+    "webhook-deliveries",
+    Message.Message.fromPartial({
+      messageId: `webhook-${Date.now()}`,
+      metadata: {
+        payload: {
+          data: {
+            url: "https://api.example.com/webhook",
+            event: "order.created",
+            payload: { orderId: "ORD-12345" },
+          },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "3",
+        maxAttempts: 5,
       },
-      priority: "80",
-      maxAttempts: 5,
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 5,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("📤 Posted webhook message (retained for 7 days)\n");
 
   // ========================================================================
@@ -228,25 +229,43 @@ async function main() {
   console.log("   Behavior: Messages never automatically deleted");
   console.log("   Storage: Grows indefinitely - manual cleanup required\n");
 
-  const permanentRetentionPolicy: MessageRetentionPolicy = {
-    mode: MessageRetentionPolicy_Mode.RETAIN_FOREVER,
+  const financialSchema = "financial-transactions-schema";
+  await client.schemas.registerSchema(
+    financialSchema,
+    JSON.stringify({
+      type: "object",
+      required: ["transactionId", "amount", "currency"],
+      properties: {
+        transactionId: { type: "string" },
+        amount: { type: "number", minimum: 0 },
+        currency: { type: "string" },
+      },
+    }),
+    { name: "Financial transaction" },
+  );
+
+  const permanentRetentionPolicy: Queue.MessageRetentionPolicy = {
+    mode: Queue.MessageRetentionPolicy_Mode.RETAIN_FOREVER,
     retentionSeconds: "0", // Ignored for RETAIN_FOREVER
   };
 
   try {
-    await client.queues.createQueue("financial-transactions", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      leaseDuration: { seconds: "300", nanos: 0 }, // 5 minutes
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "financial-transactions-dlq",
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: true, // Enforce schema for compliance
-      allowedContentTypes: ["application/json"],
-      messageRetentionPolicy: permanentRetentionPolicy,
-    });
+    await client.queues.createQueue(
+      "financial-transactions",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        leaseDuration: { seconds: "300", nanos: 0 }, // 5 minutes
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "financial-transactions-dlq",
+        maxPayloadSize: 0,
+        schemaId: financialSchema,
+        schemaRequired: true,
+        allowedContentTypes: ["application/json"],
+        messageRetentionPolicy: permanentRetentionPolicy,
+      }),
+    );
     console.log(
       '✅ Queue "financial-transactions" created (permanent retention)\n',
     );
@@ -258,32 +277,30 @@ async function main() {
     }
   }
 
-  await client.messages.postMessage("financial-transactions", {
-    messageId: `txn-${Date.now()}`,
-    metadata: {
-      payload: {
-        data: {
-          transactionId: "TXN-99999",
-          accountFrom: "ACC-12345",
-          accountTo: "ACC-67890",
-          amount: 10000.0,
-          currency: "USD",
-          timestamp: new Date().toISOString(),
+  await client.messages.postMessage(
+    "financial-transactions",
+    Message.Message.fromPartial({
+      messageId: `txn-${Date.now()}`,
+      metadata: {
+        payload: {
+          data: {
+            transactionId: "TXN-99999",
+            accountFrom: "ACC-12345",
+            accountTo: "ACC-67890",
+            amount: 10000.0,
+            currency: "USD",
+            timestamp: new Date().toISOString(),
+          },
+          metadata: { auditTrail: "required" },
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: { auditTrail: "required" },
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "4", // High priority for financial operations
+        maxAttempts: 3,
       },
-      priority: "200", // High priority for financial operations
-      maxAttempts: 3,
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("📤 Posted financial transaction (retained forever)\n");
 
   // ========================================================================

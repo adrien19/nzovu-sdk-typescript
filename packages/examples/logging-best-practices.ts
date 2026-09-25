@@ -19,7 +19,11 @@ async function defaultLoggingExample() {
   console.log("\n=== Example 1: Default Logging (WARN level) ===\n");
 
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
   });
   // Default logger: Only shows WARN and ERROR messages
 
@@ -35,7 +39,11 @@ async function silentLoggingExample() {
   console.log("\n=== Example 2: Silent Logging (No output) ===\n");
 
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
     logger: new SilentLogger(), // No SDK logs at all
   });
 
@@ -51,7 +59,11 @@ async function debugLoggingExample() {
   console.log("\n=== Example 3: Debug Logging (All messages) ===\n");
 
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
     logger: new ConsoleLogger(LogLevel.DEBUG), // Show all logs including DEBUG
   });
 
@@ -109,7 +121,11 @@ async function customLoggingExample() {
   console.log("\n=== Example 4: Custom Logger ===\n");
 
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
     logger: new CustomLogger(), // Your custom implementation
   });
 
@@ -164,7 +180,9 @@ class WinstonLogger implements Logger {
 
 async function winstonLoggingExample() {
     const client = new NzovuClient({
-        connection: { address: 'host.docker.internal:9000' },
+        connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY, address: 'host.docker.internal:9000' },
         logger: new WinstonLogger(),
     });
     

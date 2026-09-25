@@ -5,17 +5,15 @@
  * tasks that need extended processing time via LeasePolicy.
  */
 
-import {
-  NzovuClient,
-  LeasePolicy,
-  Message,
-  MessageRetentionPolicy_Mode,
-  Queue,
-} from "@nzovu/client";
+import { NzovuClient, LeasePolicy, Message, Queue } from "@nzovu/client";
 
 async function main() {
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
   });
   await client.connect();
 
@@ -48,23 +46,26 @@ async function main() {
 
   // Create queue with LeasePolicy
   try {
-    await client.queues.createQueue("long-running-tasks", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      leaseDuration: { seconds: "60", nanos: 0 }, // Backwards compatibility
-      leasePolicy: longRunningLeasePolicy, // New lease policy
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "long-running-tasks-dlq",
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: false,
-      allowedContentTypes: ["application/json"],
-      messageRetentionPolicy: {
-        mode: MessageRetentionPolicy_Mode.RETAIN_DURATION,
-        retentionSeconds: (24 * 60 * 60).toString(), // Retain messages for 1 day
-      },
-    });
+    await client.queues.createQueue(
+      "long-running-tasks",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        leaseDuration: { seconds: "60", nanos: 0 }, // Backwards compatibility
+        leasePolicy: longRunningLeasePolicy, // New lease policy
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "long-running-tasks-dlq",
+        maxPayloadSize: 0,
+        schemaId: "",
+        schemaRequired: false,
+        allowedContentTypes: ["application/json"],
+        messageRetentionPolicy: {
+          mode: Queue.MessageRetentionPolicy_Mode.RETAIN_DURATION,
+          retentionSeconds: (24 * 60 * 60).toString(), // Retain messages for 1 day
+        },
+      }),
+    );
     console.log('✅ Queue "long-running-tasks" created successfully\n');
   } catch (err: any) {
     if (
@@ -83,30 +84,28 @@ async function main() {
 
   // Example 1: Task that uses queue defaults (fits within 240s)
   console.log("📤 Posting Task 1: Standard long-running task (90s)");
-  await client.messages.postMessage("long-running-tasks", {
-    messageId: messageId,
-    metadata: {
-      payload: {
-        data: {
-          taskType: "data-processing",
-          estimatedSeconds: 90,
-          description: "Process large dataset",
+  await client.messages.postMessage(
+    "long-running-tasks",
+    Message.Message.fromPartial({
+      messageId: messageId,
+      metadata: {
+        payload: {
+          data: {
+            taskType: "data-processing",
+            estimatedSeconds: 90,
+            description: "Process large dataset",
+          },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "2",
+        maxAttempts: 3,
+        // Uses queue-level LeasePolicy (no override)
       },
-      priority: "50",
-      maxAttempts: 3,
-      // Uses queue-level LeasePolicy (no override)
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("✅ Task 1 posted (uses queue LeasePolicy)\n");
 
   // Example 2: Very long task that needs extended lease (overrides queue policy)
@@ -120,30 +119,28 @@ async function main() {
     maxRenewals: 0, // Unlimited renewals
   };
 
-  await client.messages.postMessage("long-running-tasks", {
-    messageId: `${messageId}-2`,
-    metadata: {
-      payload: {
-        data: {
-          taskType: "video-processing",
-          estimatedSeconds: 180,
-          description: "Transcode large video file",
+  await client.messages.postMessage(
+    "long-running-tasks",
+    Message.Message.fromPartial({
+      messageId: `${messageId}-2`,
+      metadata: {
+        payload: {
+          data: {
+            taskType: "video-processing",
+            estimatedSeconds: 180,
+            description: "Transcode large video file",
+          },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "3",
+        maxAttempts: 2,
+        leasePolicy: extendedLeasePolicy, // Override with longer lease
       },
-      priority: "80",
-      maxAttempts: 2,
-      leasePolicy: extendedLeasePolicy, // Override with longer lease
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 2,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("✅ Task 2 posted (uses custom extended LeasePolicy)\n");
 
   // Example 3: Quick task that doesn't need long lease (override with shorter)
@@ -157,30 +154,28 @@ async function main() {
     maxRenewals: 0, // Unlimited renewals
   };
 
-  await client.messages.postMessage("long-running-tasks", {
-    messageId: `${messageId}-3`,
-    metadata: {
-      payload: {
-        data: {
-          taskType: "quick-check",
-          estimatedSeconds: 30,
-          description: "Quick validation task",
+  await client.messages.postMessage(
+    "long-running-tasks",
+    Message.Message.fromPartial({
+      messageId: `${messageId}-3`,
+      metadata: {
+        payload: {
+          data: {
+            taskType: "quick-check",
+            estimatedSeconds: 30,
+            description: "Quick validation task",
+          },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "1",
+        maxAttempts: 3,
+        leasePolicy: quickLeasePolicy, // Override with shorter lease
       },
-      priority: "30",
-      maxAttempts: 3,
-      leasePolicy: quickLeasePolicy, // Override with shorter lease
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("✅ Task 3 posted (uses custom quick LeasePolicy)\n");
 
   console.log("📊 Summary:");

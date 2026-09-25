@@ -31,19 +31,24 @@ async function processLongRunningTask(
 
 async function main() {
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
   });
   await client.connect();
 
   let running = true;
 
   // Graceful shutdown on SIGINT (Ctrl+C)
-  process.on("SIGINT", async () => {
+  const shutdown = async () => {
     console.log("\n🛑 Shutting down worker...");
     running = false;
     await client.disconnect();
-    process.exit(0);
-  });
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 
   console.log("🚀 Long-running worker started");
   console.log("📋 LeasePolicy configuration:");
@@ -56,7 +61,7 @@ async function main() {
 
   try {
     while (running) {
-      const { message, workerId, attemptId, stopHeartbeat } =
+      const { message, workerId, attemptId, claim } =
         await client.messages.getNextMessage(
           "long-running-tasks",
           undefined, // Use LeasePolicy from queue/message
@@ -87,10 +92,9 @@ async function main() {
         await processLongRunningTask(payload, taskDuration);
 
         // Check if lease expired during processing by checking if heartbeat was stopped
-        const heartbeatContext = (client.messages as any).heartbeats?.get(
-          message.messageId,
-        );
-        if (!heartbeatContext) {
+        const heartbeatContext =
+          claim && client.messages.getHeartbeatHealth(claim);
+        if (!heartbeatContext?.isActive) {
           leaseExpired = true;
           console.log(
             "⚠️  Lease expired during processing - skipping acknowledgment",
@@ -123,7 +127,7 @@ async function main() {
               attemptId,
             );
           } catch (ackErr: any) {
-            if (ackErr.code === 9) {
+            if (ackErr.code === "FAILED_PRECONDITION") {
               // FAILED_PRECONDITION
               console.warn(
                 "⚠️  Could not acknowledge - message already in terminal state",
@@ -139,8 +143,8 @@ async function main() {
         }
       } finally {
         // Always stop heartbeat when done
-        if (stopHeartbeat) {
-          stopHeartbeat();
+        if (claim) {
+          client.messages.releaseClaim(claim);
           console.log("🔇 Heartbeat stopped");
         }
       }

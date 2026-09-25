@@ -1,20 +1,24 @@
 import { NzovuClient, Message } from "@nzovu/client";
 
 const client = new NzovuClient({
-  connection: { address: "host.docker.internal:9000" },
+  connection: {
+    insecure: process.env.NZOVU_INSECURE === "true",
+    apiKey: process.env.NZOVU_API_KEY,
+    address: process.env.NZOVU_ADDRESS || "localhost:9000",
+  },
 });
 
 async function postTrips() {
   await client.connect();
 
   const trips = [
-    { id: "trip-london-004", destination: "London, UK", priority: 9 },
-    { id: "trip-rome-005", destination: "Rome, Italy", priority: 7 },
-    { id: "trip-barcelona-006", destination: "Barcelona, Spain", priority: 5 },
+    { id: "trip-london-004", destination: "London, UK", priority: 4 },
+    { id: "trip-rome-005", destination: "Rome, Italy", priority: 3 },
+    { id: "trip-barcelona-006", destination: "Barcelona, Spain", priority: 2 },
   ];
 
   for (const trip of trips) {
-    const message: Message.Message = {
+    const message: Message.Message = Message.Message.fromPartial({
       messageId: trip.id,
       metadata: {
         payload: {
@@ -35,13 +39,8 @@ async function postTrips() {
         },
         priority: trip.priority.toString(),
         maxAttempts: 3,
-        state: Message.Message_Metadata_State.PENDING,
-        attemptsLeft: 3,
-        leaseExpiry: "",
-        leaseRenewalCount: 0,
-        priorityLevel: trip.priority,
       },
-    };
+    });
 
     await client.messages.postMessage("trip-planning-requests", message);
     console.log(`✅ Posted: ${trip.id} to ${trip.destination}`);
@@ -50,4 +49,7 @@ async function postTrips() {
   await client.disconnect();
 }
 
-postTrips();
+postTrips().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

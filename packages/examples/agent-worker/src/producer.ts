@@ -5,7 +5,7 @@
  * Tasks are consumed and executed by agent workers.
  */
 
-import { NzovuClient } from "@nzovu/client";
+import { Queue, NzovuClient } from "@nzovu/client";
 import { Message } from "@nzovu/proto";
 import {
   TaskType,
@@ -16,7 +16,7 @@ import {
 } from "./types.js";
 
 // Configuration
-const NZOVU_ADDRESS = process.env.NZOVU_ADDRESS || "host.docker.internal:9000";
+const NZOVU_ADDRESS = process.env.NZOVU_ADDRESS || "localhost:9000";
 const QUEUE_NAME = process.env.QUEUE_NAME || "agent-tasks";
 
 /**
@@ -32,27 +32,25 @@ function createTaskId(prefix: string): string {
 async function postTask(
   client: NzovuClient,
   task: AgentTaskPayload,
-  priority: number = 5,
+  priority: number = 2,
 ): Promise<void> {
-  await client.messages.postMessage(QUEUE_NAME, {
-    messageId: task.taskId,
-    metadata: {
-      payload: {
-        data: task as unknown as Record<string, unknown>,
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+  await client.messages.postMessage(
+    QUEUE_NAME,
+    Message.Message.fromPartial({
+      messageId: task.taskId,
+      metadata: {
+        payload: {
+          data: task as unknown as Record<string, unknown>,
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
+        },
+        priority: String(priority),
+        maxAttempts: 3,
       },
-      priority: String(priority * 10), // Scale 1-10 to 10-100
-      maxAttempts: 3,
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
 
   console.log(`✓ Posted task: ${task.taskId} (priority: ${priority})`);
 }
@@ -112,6 +110,8 @@ async function main(): Promise<void> {
   // Connect to Nzovu
   const client = new NzovuClient({
     connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
       address: NZOVU_ADDRESS,
     },
   });
@@ -123,23 +123,29 @@ async function main(): Promise<void> {
     // Ensure queue exists with proper configuration
     console.log("📋 Ensuring queue exists...");
     try {
-      await client.queues.createQueue(QUEUE_NAME, {
-        type: 0, // SIMPLE
-        defaultMaxAttempts: 3,
-        autoCreateDlq: true,
-        deadLetterQueueName: `${QUEUE_NAME}-dlq`,
-        leasePolicy: {
-          baseLease: { seconds: "60", nanos: 0 },
-          maxExtension: { seconds: "300", nanos: 0 },
-          heartbeatTimeout: { seconds: "30", nanos: 0 },
-          extendStep: { seconds: "30", nanos: 0 },
-          maxRenewals: 5,
-        },
-      });
+      await client.queues.createQueue(
+        QUEUE_NAME,
+        Queue.QueueMetadata.fromPartial({
+          type: 0, // SIMPLE
+          defaultMaxAttempts: 3,
+          autoCreateDlq: true,
+          deadLetterQueueName: `${QUEUE_NAME}-dlq`,
+          leasePolicy: {
+            baseLease: { seconds: "60", nanos: 0 },
+            maxExtension: { seconds: "300", nanos: 0 },
+            heartbeatTimeout: { seconds: "30", nanos: 0 },
+            extendStep: { seconds: "30", nanos: 0 },
+            maxRenewals: 5,
+          },
+        }),
+      );
       console.log(`   ✓ Queue '${QUEUE_NAME}' created`);
     } catch (err: any) {
       // Check for already exists (code 6) or duplicate key error
-      if (err.code === 6 || err.details?.includes("duplicate key")) {
+      if (
+        err.code === "ALREADY_EXISTS" ||
+        err.details?.includes("duplicate key")
+      ) {
         console.log(`   ✓ Queue '${QUEUE_NAME}' already exists`);
       } else {
         throw err;
@@ -151,9 +157,9 @@ async function main(): Promise<void> {
     const tasks = createSampleTasks();
 
     // Post with different priorities
-    await postTask(client, tasks[0], 8); // Shell command - high priority
-    await postTask(client, tasks[1], 5); // HTTP request - normal priority
-    await postTask(client, tasks[2], 3); // Notification - lower priority
+    await postTask(client, tasks[0], 4); // Shell command - high priority
+    await postTask(client, tasks[1], 2); // HTTP request - normal priority
+    await postTask(client, tasks[2], 1); // Notification - lower priority
 
     // Get queue state
     console.log("\n📊 Queue state:");

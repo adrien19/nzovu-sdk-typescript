@@ -9,7 +9,11 @@ import { NzovuClient, LeasePolicy, Message, Queue } from "@nzovu/client";
 
 async function main() {
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
   });
   await client.connect();
 
@@ -39,19 +43,22 @@ async function main() {
   };
 
   try {
-    await client.queues.createQueue("lease-policy-demo", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      leaseDuration: { seconds: "30", nanos: 0 }, // Fallback for old behavior
-      leasePolicy: queueLeasePolicy, // New lease policy
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "",
-      schemaId: "",
-      schemaRequired: false,
-      maxPayloadSize: 0,
-      allowedContentTypes: [],
-    });
+    await client.queues.createQueue(
+      "lease-policy-demo",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        leaseDuration: { seconds: "30", nanos: 0 }, // Fallback for old behavior
+        leasePolicy: queueLeasePolicy, // New lease policy
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "",
+        schemaId: "",
+        schemaRequired: false,
+        maxPayloadSize: 0,
+        allowedContentTypes: [],
+      }),
+    );
     console.log("✓ Queue created with LeasePolicy configuration");
   } catch (err: any) {
     if (err?.message && /already exists/i.test(err.message)) {
@@ -74,26 +81,24 @@ async function main() {
     maxRenewals: 0, // Unlimited renewals
   };
 
-  await client.messages.postMessage("lease-policy-demo", {
-    messageId: "urgent-task-1",
-    metadata: {
-      payload: {
-        data: { taskType: "complex-computation", priority: "urgent" },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+  await client.messages.postMessage(
+    "lease-policy-demo",
+    Message.Message.fromPartial({
+      messageId: "urgent-task-1",
+      metadata: {
+        payload: {
+          data: { taskType: "complex-computation", priority: "urgent" },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
+        },
+        priority: "4",
+        maxAttempts: 3,
+        leasePolicy: urgentTaskLeasePolicy, // Override queue's default
       },
-      priority: "100",
-      maxAttempts: 3,
-      leasePolicy: urgentTaskLeasePolicy, // Override queue's default
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("✓ Message posted with custom LeasePolicy override");
 
   // ========================================================================
@@ -101,26 +106,24 @@ async function main() {
   // ========================================================================
   // If no message-level leasePolicy is specified, it inherits from the queue
 
-  await client.messages.postMessage("lease-policy-demo", {
-    messageId: "standard-task-1",
-    metadata: {
-      payload: {
-        data: { taskType: "simple-task", priority: "normal" },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+  await client.messages.postMessage(
+    "lease-policy-demo",
+    Message.Message.fromPartial({
+      messageId: "standard-task-1",
+      metadata: {
+        payload: {
+          data: { taskType: "simple-task", priority: "normal" },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
+        },
+        priority: "2",
+        maxAttempts: 3,
+        // No leasePolicy specified - inherits from queue
       },
-      priority: "50",
-      maxAttempts: 3,
-      // No leasePolicy specified - inherits from queue
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
   console.log("✓ Message posted (inherits queue LeasePolicy)");
 
   // ========================================================================

@@ -1,199 +1,29 @@
-# Agent Worker Example
+# Agent worker
 
-A demonstration of using Nzovu as a task orchestration system for agent workers.
+A concurrent Nzovu worker dispatches shell-command, HTTP-request and notification
+tasks to the handlers in `src/handlers.ts`. Only submit tasks from trusted producers:
+these handlers deliberately execute commands and make HTTP requests.
 
-## Overview
+From the repository root:
 
-This example shows how to build an agent-based task execution system using Nzovu:
-
-- **Producer**: Posts tasks to Nzovu with priorities
-- **Worker**: Consumes and executes tasks with lease management and heartbeats
-- **Handlers**: Pluggable task handlers for different task types
-
-## Task Types
-
-| Task Type        | Description                                         |
-| ---------------- | --------------------------------------------------- |
-| `shell_command`  | Execute shell commands                              |
-| `http_request`   | Make HTTP requests                                  |
-| `data_transform` | Transform data with map/filter/reduce               |
-| `notification`   | Send notifications (console, webhook, email, slack) |
-| `aggregation`    | Aggregate results from multiple tasks               |
-| `custom`         | Execute custom handlers                             |
-
-## Architecture
-
-```
-┌─────────────┐     ┌──────────────┐     ┌─────────────┐
-│   Producer  │────▶│  Nzovu │────▶│   Worker    │
-│             │     │              │     │             │
-│ Posts tasks │     │ • Priority   │     │ • Consume   │
-│ with        │     │   ordering   │     │ • Execute   │
-│ priorities  │     │ • Lease mgmt │     │ • Heartbeat │
-│             │     │ • Retry/DLQ  │     │ • Ack/Nack  │
-└─────────────┘     └──────────────┘     └─────────────┘
+```sh
+make install-dev build-all check-examples
+export NZOVU_ADDRESS=localhost:9000
+export NZOVU_INSECURE=true
+pnpm --filter @nzovu/agent-worker-example start:producer
+pnpm --filter @nzovu/agent-worker-example start:worker
 ```
 
-## Quick Start
+The producer creates `agent-tasks` and publishes tasks with priorities 4, 2 and 1.
+`QUEUE_NAME` overrides that queue for both processes; `CONCURRENCY` defaults to 1.
+For TLS, omit `NZOVU_INSECURE`, provide `NODE_EXTRA_CA_CERTS` for a private CA, and
+set `NZOVU_API_KEY` when required. See the [shared setup](../README.md).
 
-### 1. Install Dependencies
+The worker preserves worker/attempt ownership for every heartbeat and ACK.
+Successful tasks are acknowledged; failed tasks release their local heartbeat and
+can be reclaimed after lease expiry. SIGINT/SIGTERM waits for active work up to
+the configured shutdown timeout, then disconnects and clears heartbeat state.
 
-```bash
-cd packages/examples/agent-worker
-pnpm install
-```
-
-### 2. Start Nzovu Server
-
-Make sure Nzovu is running on `localhost:9000` (or set `NZOVU_ADDRESS`).
-
-### 3. Run the Producer
-
-Post sample tasks to the queue:
-
-```bash
-pnpm start:producer
-```
-
-### 4. Run the Worker
-
-Start consuming and executing tasks:
-
-```bash
-pnpm start:worker
-```
-
-## Configuration
-
-### Environment Variables
-
-| Variable        | Default          | Description          |
-| --------------- | ---------------- | -------------------- |
-| `NZOVU_ADDRESS` | `localhost:9000` | Nzovu server address |
-| `QUEUE_NAME`    | `agent-tasks`    | Queue to use         |
-| `CONCURRENCY`   | `1`              | Max concurrent tasks |
-
-### Worker Configuration
-
-```typescript
-const worker = new AgentWorker({
-  workerId: "my-worker",
-  queueName: "agent-tasks",
-  serverAddress: "localhost:9000",
-  concurrency: 4,
-  pollIntervalMs: 1000,
-  enableHeartbeat: true,
-  heartbeatIntervalMs: 10000,
-  shutdownTimeoutMs: 30000,
-});
-```
-
-## Task Payloads
-
-### Shell Command
-
-```typescript
-{
-  taskId: 'shell-001',
-  taskType: 'shell_command',
-  command: 'ls',
-  args: ['-la', '/tmp'],
-  cwd: '/home/user',
-  timeoutMs: 30000
-}
-```
-
-### HTTP Request
-
-```typescript
-{
-  taskId: 'http-001',
-  taskType: 'http_request',
-  url: 'https://api.example.com/data',
-  method: 'POST',
-  headers: { 'Authorization': 'Bearer token' },
-  body: { key: 'value' },
-  expectedStatus: [200, 201]
-}
-```
-
-### Notification
-
-```typescript
-{
-  taskId: 'notify-001',
-  taskType: 'notification',
-  channel: 'slack',
-  recipient: '#alerts',
-  subject: 'Task Complete',
-  message: 'All tasks processed successfully'
-}
-```
-
-## Features Demonstrated
-
-### Priority-Based Processing
-
-Tasks are processed by priority (higher first):
-
-- Priority 10: Urgent tasks
-- Priority 5: Normal tasks
-- Priority 1: Background tasks
-
-### Lease Management
-
-- Each task gets a 60-second lease
-- Workers send heartbeats every 10 seconds
-- Failed tasks return to queue automatically
-
-### Graceful Shutdown
-
-- SIGINT/SIGTERM triggers graceful shutdown
-- Worker waits for active tasks to complete
-- Configurable shutdown timeout
-
-### Error Handling
-
-- Tasks that throw errors don't get acknowledged
-- Nzovu automatically retries (up to max_attempts)
-- Failed tasks eventually go to Dead Letter Queue
-
-## Extending
-
-### Add Custom Handlers
-
-```typescript
-// In handlers.ts
-async function handleMyCustomTask(
-  task: CustomTask,
-  context: HandlerContext,
-): Promise<unknown> {
-  context.log("Processing custom task");
-  context.sendHeartbeat(); // For long-running tasks
-
-  // Your logic here
-  return { success: true };
-}
-
-// Register in handlers map
-const handlers = {
-  // ...existing handlers
-  [TaskType.CUSTOM]: handleMyCustomTask,
-};
-```
-
-### Scale Workers
-
-Run multiple workers for parallel processing:
-
-```bash
-# Terminal 1
-WORKER_ID=worker-1 pnpm start:worker
-
-# Terminal 2
-WORKER_ID=worker-2 pnpm start:worker
-```
-
-## License
-
-MIT
+`make check-examples` compiles this application. Live validation runs the producer
+and tests idle-worker shutdown; command execution and external HTTP services are
+not invoked by the validation suite.

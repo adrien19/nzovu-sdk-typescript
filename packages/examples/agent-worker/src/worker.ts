@@ -22,7 +22,7 @@ import {
 const defaultConfig: WorkerConfig = {
   workerId: `worker-${process.pid}-${Date.now().toString(36)}`,
   queueName: process.env.QUEUE_NAME || "agent-tasks",
-  serverAddress: process.env.NZOVU_ADDRESS || "host.docker.internal:9000",
+  serverAddress: process.env.NZOVU_ADDRESS || "localhost:9000",
   concurrency: 1,
   pollIntervalMs: 1000,
   enableHeartbeat: true,
@@ -45,6 +45,8 @@ class AgentWorker {
     this.config = { ...defaultConfig, ...config };
     this.client = new NzovuClient({
       connection: {
+        insecure: process.env.NZOVU_INSECURE === "true",
+        apiKey: process.env.NZOVU_API_KEY,
         address: this.config.serverAddress,
       },
       workerId: this.config.workerId,
@@ -251,6 +253,12 @@ class AgentWorker {
       this.stats.tasksProcessed++;
       // Message will return to queue when lease expires
     } finally {
+      this.client.messages.releaseClaim({
+        queueName: this.config.queueName,
+        messageId,
+        workerId,
+        attemptId,
+      });
       this.activeTaskCount--;
       this.stats.currentTasks = this.activeTaskCount;
       this.stats.lastTaskAt = new Date().toISOString();

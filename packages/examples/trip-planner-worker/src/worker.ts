@@ -18,7 +18,7 @@ import {
 } from "./types";
 
 const QUEUE_NAME = "trip-planning-requests";
-const SERVER_ADDRESS = process.env.NZOVU_SERVER || "host.docker.internal:9000";
+const SERVER_ADDRESS = process.env.NZOVU_ADDRESS || "localhost:9000";
 const WORKER_ID = `worker-${process.pid}`;
 
 class TripPlannerWorker {
@@ -28,7 +28,11 @@ class TripPlannerWorker {
 
   constructor() {
     this.client = new NzovuClient({
-      connection: { address: SERVER_ADDRESS },
+      connection: {
+        insecure: process.env.NZOVU_INSECURE === "true",
+        apiKey: process.env.NZOVU_API_KEY,
+        address: SERVER_ADDRESS,
+      },
       workerId: WORKER_ID,
     });
     this.stats = {
@@ -111,6 +115,12 @@ class TripPlannerWorker {
         console.error("   ⚠️  Failed to acknowledge error:", ackError);
       }
       if (stopHeartbeat) stopHeartbeat();
+      this.client.messages.releaseClaim({
+        queueName: QUEUE_NAME,
+        messageId,
+        workerId,
+        attemptId,
+      });
       return;
     }
     const payload = rawPayload as PlanTripPayload;
@@ -171,6 +181,12 @@ class TripPlannerWorker {
       }
     } finally {
       if (stopHeartbeat) stopHeartbeat();
+      this.client.messages.releaseClaim({
+        queueName: QUEUE_NAME,
+        messageId,
+        workerId,
+        attemptId,
+      });
     }
   }
 
