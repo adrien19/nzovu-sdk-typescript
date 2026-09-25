@@ -29,12 +29,14 @@ make lint
 make format FORMAT_FLAGS=--check
 make check-generated
 make check-examples
+make check-distribution
 make audit
 pnpm run check:identity
 ```
 
 `make ci` runs build, type, test, formatting, identity and example checks locally.
-`make audit` checks locked dependencies. It does not start GitHub Actions,
+`make check-distribution` verifies dry-run file inventories and isolated consumers,
+including the MCP executable, without creating archives. `make audit` checks locked dependencies. It does not start GitHub Actions,
 package archives or publication. Local builds emit JavaScript and declarations
 for tests. All package manifests remain private; `prepack` and `prepublishOnly`
 reject packaging/publication. `.github/workflows/ci.yml` runs quality checks on

@@ -82,4 +82,5 @@ jobs:
           NZOVU_TEST_POSTGRES_DSN: postgres://nzovu:sdk-fixture@localhost:5432/nzovu?sslmode=disable
         run: |
           node scripts/check-imports.mjs
+          node scripts/check-distribution.mjs
           python3 scripts/run-live.py --server-binary "$RUNNER_TEMP/nzovu" --temp-root "$RUNNER_TEMP" -- node --test --test-concurrency=1 scripts/live.mjs scripts/examples.live.mjs

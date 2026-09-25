@@ -3,6 +3,9 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { ROOT } from "./proto.mjs";
 
+const version = JSON.parse(
+  readFileSync(new URL("../package.json", import.meta.url), "utf8"),
+).version;
 const packages = {
   proto: "@nzovu/proto",
   client: "@nzovu/client",
@@ -15,7 +18,7 @@ for (const [directory, name] of Object.entries(packages)) {
     ),
   );
   assert.equal(manifest.name, name);
-  assert.equal(manifest.version, "0.0.1-dev.0");
+  assert.equal(manifest.version, version);
   assert.equal(manifest.private, true);
 }
 const common = `
@@ -37,7 +40,7 @@ const esm = `
   assert.equal(typeof NzovuError, 'function');
   assert.equal(Object.keys(QueueService.QueueServiceService).length, 31);
   assert.equal(typeof createMCPServer, 'function');
-  assert.equal(VERSION, '0.0.1-dev.0');
+  assert.equal(VERSION, ${JSON.stringify(version)});
 `;
 execFileSync(process.execPath, ["--input-type=module", "-e", esm], {
   cwd: ROOT,

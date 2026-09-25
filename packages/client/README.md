@@ -206,3 +206,10 @@ ambiguous outcome and must not be blindly replayed.
 ## License
 
 MIT. Original attribution preserved in the repository `LICENCE`.
+
+## Package contents
+
+Runtime JavaScript, declarations, source maps with embedded sources, this README,
+the original [MIT license](LICENCE), and a portable release guard are included.
+Standalone source files and tests are excluded. See
+[development setup](https://github.com/adrien19/nzovu-sdk-typescript#development).

@@ -231,7 +231,7 @@ build: build-all
 
 
 # Run all CI checks
-ci: gen-proto lint typecheck test-all build-all check-generated check-examples
+ci: gen-proto lint typecheck test-all build-all check-generated check-examples check-distribution
 	@$(PNPM) run check:identity
 	@$(PNPM) run check:imports
 	@echo "$(GREEN)All CI checks passed!$(NC)"
@@ -252,3 +252,7 @@ audit:
 
 test-live: build-all check-examples
 	@python3 scripts/run-live.py --server-binary "$(SERVER_BINARY)" -- node --test --test-concurrency=1 scripts/live.mjs scripts/examples.live.mjs
+
+.PHONY: check-distribution
+check-distribution: build-all
+	@node scripts/check-distribution.mjs

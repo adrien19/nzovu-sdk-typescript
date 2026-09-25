@@ -107,6 +107,17 @@ MCP cancellation propagates to the underlying RPC and retry wait. EOF, transport
 closure, SIGINT and SIGTERM disconnect the SDK, cancel calls, clear claims and
 remove listeners. `createMCPServer()` can be embedded; await `server.close()`.
 Use `signalHandlers: false` when the embedding application owns signal handling.
+The ESM package root exports the factory without starting the CLI:
+
+```typescript
+import { createMCPServer } from '@nzovu/mcp-server';
+
+const server = await createMCPServer({ signalHandlers: false });
+// Connect an MCP transport, then close the server when the application stops.
+await server.close();
+```
+
+The `nzovu-mcp` executable remains the stdio entry point.
 
 Run from the repository root:
 
@@ -121,3 +132,10 @@ cancellation and shutdown. This validates protocol behavior; live SQLite/Postgre
 server validation remains a separate development gate.
 
 MIT. Original attribution retained in the repository `LICENCE`.
+
+## Package contents
+
+Runtime JavaScript, declarations, source maps with embedded sources, this README,
+the original [MIT license](LICENCE), and a portable release guard are included.
+Standalone source files and tests are excluded. See
+[development setup](https://github.com/adrien19/nzovu-sdk-typescript#development).
