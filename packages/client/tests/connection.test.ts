@@ -1,5 +1,6 @@
 import { Connection, ConnectionState } from "../src/connection";
-import { NzovuError } from "../src/types";
+import { NzovuError, ErrorCode } from "../src/types";
+import * as grpc from "@grpc/grpc-js";
 
 // Mock the grpc-js module
 jest.mock("@grpc/grpc-js", () => {
@@ -253,6 +254,58 @@ describe("Connection", () => {
       const result = await connection.withRetry(operation);
       expect(result).toBe("result");
     });
+  });
+
+  it("expires the original deadline after retries and backoff", async () => {
+    const { QueueService } = require("@nzovu/proto");
+    const cancel = jest.fn();
+    const listQueues = jest.fn((_request, _metadata, _options, callback) => {
+      if (listQueues.mock.calls.length < 3)
+        queueMicrotask(() => callback({ code: grpc.status.UNAVAILABLE }));
+      return { cancel };
+    });
+    QueueService.QueueServiceClient.mockImplementationOnce(() => ({
+      waitForReady: jest.fn((_deadline, callback) => callback(null)),
+      close: jest.fn(),
+      listQueues,
+    }));
+    jest.setSystemTime(new Date("2026-01-01T00:00:00Z"));
+    const random = jest.spyOn(Math, "random").mockReturnValue(0.5);
+    connection = new Connection(
+      {
+        address: "localhost:9000",
+        retry: { maxRetries: 100, baseDelay: 10, maxDelay: 20 },
+      },
+      80,
+    );
+    try {
+      await connection.connect();
+      const deadline = Date.now() + 80;
+      const result = expect(
+        connection.invoke("listQueues", {
+          prefix: "",
+          pageSize: 0,
+          pageToken: "",
+        }),
+      ).rejects.toMatchObject({ code: ErrorCode.DEADLINE_EXCEEDED });
+      await jest.advanceTimersByTimeAsync(79);
+      expect(listQueues).toHaveBeenCalledTimes(3);
+      expect(listQueues.mock.calls.map((args) => args[2].deadline)).toEqual([
+        deadline,
+        deadline,
+        deadline,
+      ]);
+      expect(cancel).not.toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(1);
+      await result;
+      expect(cancel).toHaveBeenCalledTimes(1);
+      await jest.advanceTimersByTimeAsync(1000);
+      expect(listQueues).toHaveBeenCalledTimes(3);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      await connection.disconnect();
+      random.mockRestore();
+    }
   });
 
   describe("health check", () => {
