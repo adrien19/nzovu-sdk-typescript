@@ -2,6 +2,8 @@ packages:
   - "packages/client"
   - "packages/proto"
   - "packages/examples"
+  - "packages/examples/agent-worker"
+  - "packages/examples/trip-planner-worker"
   - "packages/mcp"
 
 # Only allow installing packages that are at least a day old

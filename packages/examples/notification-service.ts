@@ -4,7 +4,9 @@ async function main() {
   // Initialize the Nzovu client
   const client = new NzovuClient({
     connection: {
-      address: "host.docker.internal:9000",
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
     },
   });
   await client.connect();
@@ -20,19 +22,21 @@ async function main() {
       maxRenewals: 0, // Unlimited renewals
     };
 
-    await client.queues.createQueue("email-reminders", {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      leaseDuration: { seconds: "120", nanos: 0 }, // 2 minutes default lease (backwards compat)
-      leasePolicy: queueLeasePolicy, // New lease policy configuration
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: "",
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: false,
-      allowedContentTypes: ["application/json"],
-    });
+    await client.queues.createQueue(
+      "email-reminders",
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        leasePolicy: queueLeasePolicy, // New lease policy configuration
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: "",
+        maxPayloadSize: 0,
+        schemaId: "",
+        schemaRequired: false,
+        allowedContentTypes: ["application/json"],
+      }),
+    );
   } catch (err: any) {
     if (err && err.message && /already exists/i.test(err.message)) {
       console.log("Queue already exists, continuing...");
@@ -51,30 +55,28 @@ async function main() {
     maxRenewals: 0, // Unlimited renewals
   };
 
-  await client.messages.postMessage("email-reminders", {
-    messageId: "reminder",
-    metadata: {
-      payload: {
-        data: {
-          to: "user@example.com",
-          subject: "Reminder: Meeting at 3PM",
-          body: "Don't forget your meeting at 3PM today!",
+  await client.messages.postMessage(
+    "email-reminders",
+    Message.Message.fromPartial({
+      messageId: "reminder",
+      metadata: {
+        payload: {
+          data: {
+            to: "user@example.com",
+            subject: "Reminder: Meeting at 3PM",
+            body: "Don't forget your meeting at 3PM today!",
+          },
+          metadata: {},
+          contentType: "application/json",
+          schemaId: "",
+          schemaVersion: 0,
         },
-        metadata: {},
-        contentType: "application/json",
-        schemaId: "",
-        schemaVersion: 0,
+        priority: "2",
+        maxAttempts: 3,
+        leasePolicy: messageLeasePolicy, // Per-message lease policy override
       },
-      priority: "50",
-      maxAttempts: 3,
-      leasePolicy: messageLeasePolicy, // Per-message lease policy override
-      state: Message.Message_Metadata_State.PENDING,
-      attemptsLeft: 3,
-      leaseExpiry: "",
-      leaseRenewalCount: 0,
-      priorityLevel: 0,
-    },
-  });
+    }),
+  );
 
   await client.disconnect();
 }

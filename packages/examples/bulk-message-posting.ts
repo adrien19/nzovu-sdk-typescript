@@ -12,6 +12,7 @@
  */
 
 import {
+  Queue,
   BulkMessageErrorCode,
   NzovuClient,
   Message,
@@ -23,7 +24,9 @@ async function main() {
   // Initialize client
   const client = new NzovuClient({
     connection: {
-      address: "localhost:9000",
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
     },
   });
 
@@ -33,10 +36,13 @@ async function main() {
 
     // Create a queue for testing
     const queueName = "bulk-demo-queue";
-    await client.queues.createQueue(queueName, {
-      defaultMaxAttempts: 3,
-      autoCreateDlq: true,
-    });
+    await client.queues.createQueue(
+      queueName,
+      Queue.QueueMetadata.fromPartial({
+        defaultMaxAttempts: 3,
+        autoCreateDlq: true,
+      }),
+    );
     console.log(`✓ Created queue: ${queueName}\n`);
 
     // ========================================================================
@@ -45,31 +51,30 @@ async function main() {
     console.log("=== Example 1: ALL_OR_NOTHING Mode ===\n");
 
     // Create messages for bulk posting
-    const messages1: Message.Message[] = Array.from({ length: 10 }, (_, i) => ({
-      messageId: `order-${i + 1}`,
-      metadata: {
-        payload: {
-          data: {
-            orderId: i + 1,
-            customerId: `cust-${Math.floor(i / 2)}`,
-            amount: (i + 1) * 100,
-            items: [`item-${i + 1}`],
+    const messages1: Message.Message[] = Array.from({ length: 10 }, (_, i) =>
+      Message.Message.fromPartial({
+        messageId: `order-${i + 1}`,
+        metadata: {
+          payload: {
+            data: {
+              orderId: i + 1,
+              customerId: `cust-${Math.floor(i / 2)}`,
+              amount: (i + 1) * 100,
+              items: [`item-${i + 1}`],
+            },
+            contentType: "application/json",
+            metadata: {},
+            schemaId: "",
+            schemaVersion: 0,
           },
-          contentType: "application/json",
-          metadata: {},
-          schemaId: "",
-          schemaVersion: 0,
+
+          leaseDuration: { seconds: "30", nanos: 0 },
+
+          priority: i % 2 === 0 ? "4" : "2", // Alternate priorities
+          maxAttempts: 3,
         },
-        state: Message.Message_Metadata_State.PENDING,
-        attemptsLeft: 3,
-        leaseDuration: { seconds: "30", nanos: 0 },
-        leaseExpiry: "",
-        leaseRenewalCount: 0,
-        priority: i % 2 === 0 ? "10" : "5", // Alternate priorities
-        maxAttempts: 3,
-        priorityLevel: i % 2 === 0 ? 10 : 5,
-      },
-    }));
+      }),
+    );
 
     // Post with ALL_OR_NOTHING mode (default)
     console.log(
@@ -97,7 +102,7 @@ async function main() {
     // Create messages including some duplicates to demonstrate partial failure
     const messages2: Message.Message[] = [
       // Valid new messages
-      {
+      Message.Message.fromPartial({
         messageId: "payment-1",
         metadata: {
           payload: {
@@ -107,17 +112,14 @@ async function main() {
             schemaId: "",
             schemaVersion: 0,
           },
-          state: Message.Message_Metadata_State.PENDING,
-          attemptsLeft: 3,
+
           leaseDuration: { seconds: "60", nanos: 0 },
-          leaseExpiry: "",
-          leaseRenewalCount: 0,
-          priority: "8",
+
+          priority: "3",
           maxAttempts: 3,
-          priorityLevel: 8,
         },
-      },
-      {
+      }),
+      Message.Message.fromPartial({
         messageId: "payment-2",
         metadata: {
           payload: {
@@ -127,18 +129,15 @@ async function main() {
             schemaId: "",
             schemaVersion: 0,
           },
-          state: Message.Message_Metadata_State.PENDING,
-          attemptsLeft: 3,
+
           leaseDuration: { seconds: "60", nanos: 0 },
-          leaseExpiry: "",
-          leaseRenewalCount: 0,
-          priority: "8",
+
+          priority: "3",
           maxAttempts: 3,
-          priorityLevel: 8,
         },
-      },
+      }),
       // Duplicate from previous batch (will fail)
-      {
+      Message.Message.fromPartial({
         messageId: "order-1", // Duplicate!
         metadata: {
           payload: {
@@ -148,16 +147,13 @@ async function main() {
             schemaId: "",
             schemaVersion: 0,
           },
-          state: Message.Message_Metadata_State.PENDING,
-          attemptsLeft: 3,
+
           leaseDuration: { seconds: "30", nanos: 0 },
-          leaseExpiry: "",
-          leaseRenewalCount: 0,
-          priority: "5",
+
+          priority: "2",
           maxAttempts: 3,
-          priorityLevel: 5,
         },
-      },
+      }),
     ];
 
     console.log(
@@ -202,9 +198,8 @@ async function main() {
     // ========================================================================
     console.log("\n=== Example 3: Large Batch (100 messages) ===\n");
 
-    const messages3: Message.Message[] = Array.from(
-      { length: 100 },
-      (_, i) => ({
+    const messages3: Message.Message[] = Array.from({ length: 100 }, (_, i) =>
+      Message.Message.fromPartial({
         messageId: `batch-msg-${i + 1}`,
         metadata: {
           payload: {
@@ -218,14 +213,11 @@ async function main() {
             schemaId: "",
             schemaVersion: 0,
           },
-          state: Message.Message_Metadata_State.PENDING,
-          attemptsLeft: 3,
+
           leaseDuration: { seconds: "30", nanos: 0 },
-          leaseExpiry: "",
-          leaseRenewalCount: 0,
-          priority: "5",
+
+          priority: "2",
           maxAttempts: 3,
-          priorityLevel: 5,
         },
       }),
     );
@@ -252,26 +244,25 @@ async function main() {
     // ========================================================================
     console.log("=== Example 4: Error Handling Patterns ===\n");
 
-    const messages4: Message.Message[] = Array.from({ length: 5 }, (_, i) => ({
-      messageId: `error-test-${i + 1}`,
-      metadata: {
-        payload: {
-          data: { testId: i + 1 },
-          contentType: "application/json",
-          metadata: {},
-          schemaId: "",
-          schemaVersion: 0,
+    const messages4: Message.Message[] = Array.from({ length: 5 }, (_, i) =>
+      Message.Message.fromPartial({
+        messageId: `error-test-${i + 1}`,
+        metadata: {
+          payload: {
+            data: { testId: i + 1 },
+            contentType: "application/json",
+            metadata: {},
+            schemaId: "",
+            schemaVersion: 0,
+          },
+
+          leaseDuration: { seconds: "30", nanos: 0 },
+
+          priority: "2",
+          maxAttempts: 3,
         },
-        state: Message.Message_Metadata_State.PENDING,
-        attemptsLeft: 3,
-        leaseDuration: { seconds: "30", nanos: 0 },
-        leaseExpiry: "",
-        leaseRenewalCount: 0,
-        priority: "5",
-        maxAttempts: 3,
-        priorityLevel: 5,
-      },
-    }));
+      }),
+    );
 
     const response4 = await client.messages.postMessagesBulk(
       queueName,
@@ -345,4 +336,7 @@ function getErrorCodeName(errorCode: number): string {
 }
 
 // Run the example
-main().catch(console.error);
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

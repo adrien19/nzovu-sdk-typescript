@@ -231,7 +231,7 @@ build: build-all
 
 
 # Run all CI checks
-ci: gen-proto lint typecheck test-all build-all check-generated
+ci: gen-proto lint typecheck test-all build-all check-generated check-examples
 	@$(PNPM) run check:identity
 	@$(PNPM) run check:imports
 	@echo "$(GREEN)All CI checks passed!$(NC)"
@@ -240,3 +240,15 @@ ci: gen-proto lint typecheck test-all build-all check-generated
 # Setup everything
 all: install-dev gen-proto build-all
 	@echo "$(GREEN)Setup complete!$(NC)"
+
+.PHONY: check-examples audit test-live
+check-examples: build-client
+	@$(PNPM) exec tsc --project packages/examples
+	@$(PNPM) exec tsc --project packages/examples/agent-worker
+	@$(PNPM) exec tsc --project packages/examples/trip-planner-worker
+
+audit:
+	@$(PNPM) audit
+
+test-live: build-all check-examples
+	@python3 scripts/run-live.py --server-binary "$(SERVER_BINARY)" -- node --test --test-concurrency=1 scripts/live.mjs scripts/examples.live.mjs

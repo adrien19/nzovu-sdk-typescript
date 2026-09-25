@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22", "24"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: pnpm
+      - run: make install-dev
+      - run: make ci
+      - run: make audit
+
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["18", "20", "22", "24"]
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: nzovu
+          POSTGRES_PASSWORD: sdk-fixture
+          POSTGRES_DB: nzovu
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U nzovu -d nzovu"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - run: make install-dev build-all check-examples
+      - name: Read pinned server revision
+        id: server
+        run: node --input-type=module -e 'import { appendFileSync } from "node:fs"; import { verifySources } from "./scripts/proto.mjs"; appendFileSync(process.env.GITHUB_OUTPUT, `commit=${verifySources().commit}\n`);'
+      - uses: actions/checkout@v4
+        with:
+          repository: adrien19/nzovu
+          ref: ${{ steps.server.outputs.commit }}
+          path: .live-server
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: .live-server/go.mod
+          cache-dependency-path: .live-server/go.sum
+      - name: Build pinned server
+        working-directory: .live-server
+        run: CGO_ENABLED=1 go build -tags sqlite -o "$RUNNER_TEMP/nzovu" .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - name: Validate built imports and both backends
+        env:
+          NZOVU_TEST_POSTGRES_DSN: postgres://nzovu:sdk-fixture@localhost:5432/nzovu?sslmode=disable
+        run: |
+          node scripts/check-imports.mjs
+          python3 scripts/run-live.py --server-binary "$RUNNER_TEMP/nzovu" --temp-root "$RUNNER_TEMP" -- node --test --test-concurrency=1 scripts/live.mjs scripts/examples.live.mjs

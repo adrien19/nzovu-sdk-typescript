@@ -45,3 +45,6 @@ temp/
 *[Mm][Ii][Gg][Rr][Aa][Tt][Ii][Oo][Nn]*.[Mm][Dd]
 /docs/*VALIDATION*.md
 *.tgz
+
+# Local server checkout for compatibility tests
+/.live-server/

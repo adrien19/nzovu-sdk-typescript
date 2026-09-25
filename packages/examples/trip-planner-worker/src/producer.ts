@@ -7,42 +7,49 @@ import { NzovuClient, Message, Queue } from "@nzovu/client";
 import { PlanTripPayload, TaskType, TripRequest } from "./types";
 
 const QUEUE_NAME = "trip-planning-requests";
-const SERVER_ADDRESS = process.env.NZOVU_SERVER || "host.docker.internal:9000";
+const SERVER_ADDRESS = process.env.NZOVU_ADDRESS || "localhost:9000";
 
 async function main() {
   console.log("🚀 Starting Trip Planner Producer...");
   console.log(`📡 Connecting to Nzovu at ${SERVER_ADDRESS}\n`);
 
   const client = new NzovuClient({
-    connection: { address: SERVER_ADDRESS },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: SERVER_ADDRESS,
+    },
   });
 
   try {
     await client.connect();
 
     // Create queue if it doesn't exist
-    await client.queues.createQueue(QUEUE_NAME, {
-      type: Queue.QueueType.SIMPLE,
-      defaultMaxAttempts: 3,
-      autoCreateDlq: true,
-      exclusivityKey: "",
-      deadLetterQueueName: `${QUEUE_NAME}-dlq`,
-      maxPayloadSize: 0,
-      schemaId: "",
-      schemaRequired: false,
-      allowedContentTypes: ["application/json"],
-      leasePolicy: {
-        baseLease: { seconds: "300", nanos: 0 }, // 5-minute base lease
-        maxExtension: { seconds: "1800", nanos: 0 }, // 30 minutes max extension
-        heartbeatTimeout: { seconds: "60", nanos: 0 }, // Heartbeat every minute
-        extendStep: { seconds: "10", nanos: 0 }, // Extend by 10s per heartbeat
-        maxRenewals: 5, // Max 5 lease renewals
-      },
-      messageRetentionPolicy: {
-        mode: Queue.MessageRetentionPolicy_Mode.RETAIN_DURATION,
-        retentionSeconds: "172800", // 2 days for audit compliance
-      },
-    });
+    await client.queues.createQueue(
+      QUEUE_NAME,
+      Queue.QueueMetadata.fromPartial({
+        type: Queue.QueueType.SIMPLE,
+        defaultMaxAttempts: 3,
+        autoCreateDlq: true,
+        exclusivityKey: "",
+        deadLetterQueueName: `${QUEUE_NAME}-dlq`,
+        maxPayloadSize: 0,
+        schemaId: "",
+        schemaRequired: false,
+        allowedContentTypes: ["application/json"],
+        leasePolicy: {
+          baseLease: { seconds: "300", nanos: 0 }, // 5-minute base lease
+          maxExtension: { seconds: "1800", nanos: 0 }, // 30 minutes max extension
+          heartbeatTimeout: { seconds: "60", nanos: 0 }, // Heartbeat every minute
+          extendStep: { seconds: "10", nanos: 0 }, // Extend by 10s per heartbeat
+          maxRenewals: 5, // Max 5 lease renewals
+        },
+        messageRetentionPolicy: {
+          mode: Queue.MessageRetentionPolicy_Mode.RETAIN_DURATION,
+          retentionSeconds: "172800", // 2 days for audit compliance
+        },
+      }),
+    );
     console.log(`✅ Queue '${QUEUE_NAME}' ready\n`);
 
     // Sample trip requests
@@ -53,7 +60,7 @@ async function main() {
     }> = [
       {
         id: "trip-paris-001",
-        priority: 10,
+        priority: 4,
         request: {
           destination: "Paris, France",
           startDate: "2024-06-15",
@@ -69,7 +76,7 @@ async function main() {
       },
       {
         id: "trip-tokyo-002",
-        priority: 8,
+        priority: 3,
         request: {
           destination: "Tokyo, Japan",
           startDate: "2024-07-10",
@@ -85,7 +92,7 @@ async function main() {
       },
       {
         id: "trip-nyc-003",
-        priority: 6,
+        priority: 2,
         request: {
           destination: "New York City, USA",
           startDate: "2024-08-05",
@@ -110,7 +117,7 @@ async function main() {
         request: trip.request,
       };
 
-      const message: Message.Message = {
+      const message: Message.Message = Message.Message.fromPartial({
         messageId: trip.id,
         metadata: {
           payload: {
@@ -122,13 +129,8 @@ async function main() {
           },
           priority: trip.priority.toString(),
           maxAttempts: 3,
-          state: Message.Message_Metadata_State.PENDING,
-          attemptsLeft: 3,
-          leaseExpiry: "",
-          leaseRenewalCount: 0,
-          priorityLevel: trip.priority,
         },
-      };
+      });
 
       await client.messages.postMessage(QUEUE_NAME, message);
 

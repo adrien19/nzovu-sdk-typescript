@@ -19,23 +19,28 @@ async function processEmail(message: any) {
 
 async function main() {
   const client = new NzovuClient({
-    connection: { address: "host.docker.internal:9000" },
+    connection: {
+      insecure: process.env.NZOVU_INSECURE === "true",
+      apiKey: process.env.NZOVU_API_KEY,
+      address: process.env.NZOVU_ADDRESS || "localhost:9000",
+    },
   });
   await client.connect();
 
   let running = true;
 
   // Graceful shutdown on SIGINT (Ctrl+C)
-  process.on("SIGINT", async () => {
+  const shutdown = async () => {
     console.log("Shutting down worker...");
     running = false;
     await client.disconnect();
-    process.exit(0);
-  });
+  };
+  process.once("SIGINT", shutdown);
+  process.once("SIGTERM", shutdown);
 
   try {
     while (running) {
-      const { message, workerId, attemptId, stopHeartbeat } =
+      const { message, workerId, attemptId, claim } =
         await client.messages.getNextMessage(
           "email-reminders",
           undefined, // Use LeasePolicy from queue/message instead of fixed leaseDuration
@@ -74,7 +79,7 @@ async function main() {
           attemptId,
         );
       } finally {
-        if (stopHeartbeat) stopHeartbeat();
+        if (claim) client.messages.releaseClaim(claim);
       }
     }
   } finally {
