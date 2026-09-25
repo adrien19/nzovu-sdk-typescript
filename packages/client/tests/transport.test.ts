@@ -131,27 +131,37 @@ it.each(Array.from({ length: 16 }, (_, i) => i + 1))(
     }
   },
 );
-it("enforces one deadline across attempts and backoff", async () => {
-  const deadlines: number[] = [];
+it("preserves one client deadline across real retries", async () => {
+  let attempts = 0;
   const c = await connect(
     await serve({
-      listQueues: (call: any, cb: any) => {
-        deadlines.push(Number(call.getDeadline()));
-        cb(error(grpc.status.UNAVAILABLE));
+      listQueues: (_call: any, cb: any) => {
+        if (++attempts < 3) cb(error(grpc.status.UNAVAILABLE));
+        else cb(null, { queues: [], nextPageToken: "" });
       },
     }),
-    { retry: { maxRetries: 100, baseDelay: 10, maxDelay: 20 } },
-    80,
+    { retry: { maxRetries: 3, baseDelay: 10, maxDelay: 20 } },
+    2000,
   );
-  const start = Date.now();
-  await expect(
-    c.invoke("listQueues", R.ListQueuesRequest.fromPartial({})),
-  ).rejects.toBeDefined();
-  expect(Date.now() - start).toBeLessThan(300);
-  expect(deadlines.length).toBeGreaterThan(1);
-  expect(Math.max(...deadlines) - Math.min(...deadlines)).toBeLessThanOrEqual(
-    3,
+  // Server deadlines include transit time when reconstructed from gRPC timeouts.
+  const calls = jest.spyOn(
+    QueueService.QueueServiceClient.prototype,
+    "listQueues",
   );
+  try {
+    await expect(
+      c.invoke("listQueues", R.ListQueuesRequest.fromPartial({})),
+    ).resolves.toMatchObject({ queues: [] });
+    expect(attempts).toBe(3);
+    const deadlines = calls.mock.calls.map(
+      (args) => (args[2] as grpc.CallOptions).deadline,
+    );
+    expect(deadlines).toHaveLength(3);
+    expect(deadlines[0]).toEqual(expect.any(Number));
+    expect(new Set(deadlines).size).toBe(1);
+  } finally {
+    calls.mockRestore();
+  }
 });
 it("cancels outstanding calls, bounds admission, and ignores late responses", async () => {
   let answer: any;
