@@ -19,7 +19,15 @@
     }
   },
   "files": [
-    "lib/"
+    "lib",
+    "!**/__tests__/**",
+    "!**/*.test.*",
+    "!**/*.spec.*",
+    "!**/*.tsbuildinfo",
+    "!**/*.d.ts.map",
+    "README.md",
+    "LICENCE",
+    "scripts/block-release.mjs"
   ],
   "scripts": {
     "build": "tsc",
@@ -28,8 +36,8 @@
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
-    "prepack": "node ../../scripts/block-release.mjs",
-    "prepublishOnly": "node ../../scripts/block-release.mjs"
+    "prepack": "node scripts/block-release.mjs",
+    "prepublishOnly": "node scripts/block-release.mjs"
   },
   "keywords": [
     "nzovu"
@@ -62,7 +70,8 @@
   },
   "homepage": "https://github.com/adrien19/nzovu-sdk-typescript/tree/main/packages/proto",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "engines": {
     "node": ">= 18.0.0"

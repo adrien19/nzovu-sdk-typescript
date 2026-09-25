@@ -17,8 +17,8 @@
     "test": "jest --config jest.config.cjs",
     "test:watch": "jest --config jest.config.cjs --watch",
     "test:coverage": "jest --config jest.config.cjs --coverage",
-    "prepack": "node ../../scripts/block-release.mjs",
-    "prepublishOnly": "node ../../scripts/block-release.mjs"
+    "prepack": "node scripts/block-release.mjs",
+    "prepublishOnly": "node scripts/block-release.mjs"
   },
   "keywords": [
     "nzovu",
@@ -50,11 +50,19 @@
   },
   "homepage": "https://github.com/adrien19/nzovu-sdk-typescript/tree/main/packages/client",
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "files": [
-    "src",
-    "lib"
+    "lib",
+    "!**/__tests__/**",
+    "!**/*.test.*",
+    "!**/*.spec.*",
+    "!**/*.tsbuildinfo",
+    "!**/*.d.ts.map",
+    "README.md",
+    "LICENCE",
+    "scripts/block-release.mjs"
   ],
   "engines": {
     "node": ">= 18.0.0"

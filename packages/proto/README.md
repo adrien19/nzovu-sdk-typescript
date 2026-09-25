@@ -69,3 +69,10 @@ seconds/nanos object, not protobuf JSON ISO strings. Use the client
 
 Both CommonJS `require('@nzovu/proto')` and ESM imports from the built package are
 supported. Type declarations are emitted alongside CommonJS output in `lib/`.
+
+## Package contents
+
+Runtime JavaScript, declarations, source maps with embedded sources, this README,
+the original [MIT license](LICENCE), and a portable release guard are included.
+Standalone source files and tests are excluded. See
+[development setup](https://github.com/adrien19/nzovu-sdk-typescript#development).

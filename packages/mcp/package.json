@@ -3,17 +3,25 @@
   "version": "0.0.1-dev.0",
   "description": "Nzovu MCP Server - Integrate Nzovu with AI assistants via Model Context Protocol",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
   "bin": {
     "nzovu-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
-    "!dist/__tests__"
+    "!**/__tests__/**",
+    "!**/*.test.*",
+    "!**/*.spec.*",
+    "!**/*.tsbuildinfo",
+    "!**/*.d.ts.map",
+    "README.md",
+    "LICENCE",
+    "scripts/block-release.mjs"
   ],
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
     "build": "tsc",
@@ -24,8 +32,8 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
-    "prepack": "node ../../scripts/block-release.mjs",
-    "prepublishOnly": "node ../../scripts/block-release.mjs"
+    "prepack": "node scripts/block-release.mjs",
+    "prepublishOnly": "node scripts/block-release.mjs"
   },
   "keywords": [
     "nzovu",
@@ -67,5 +75,12 @@
     "directory": "packages/mcp"
   },
   "homepage": "https://github.com/adrien19/nzovu-sdk-typescript/tree/main/packages/mcp",
-  "private": true
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "default": "./dist/server.js"
+    }
+  }
 }
